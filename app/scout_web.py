@@ -99,6 +99,9 @@ def _is_vendor(url: str, domains=None) -> bool:
     return any(p in path for p in VENDOR_PATHS) and not _on(host, domains or _domains())
 
 
+NOT_A_PERSON = {"i", "home", "search", "explore", "hashtag", "intent", "share"}  # X paths that are not an account
+
+
 def _author(url: str) -> str:
     host, path = _host(url), urlparse(url).path
     if _on(host, ["reddit.com"]):
@@ -107,7 +110,8 @@ def _author(url: str) -> str:
         m = re.match(r"^/([A-Za-z0-9_]{1,15})/status/", path)
     else:
         m = None
-    return m.group(1) if m else ""
+    name = m.group(1) if m else ""
+    return "" if name.lower() in NOT_A_PERSON else name
 
 
 def _date(s) -> str:

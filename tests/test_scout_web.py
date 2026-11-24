@@ -193,3 +193,8 @@ def test_drop_sellers_ignores_names_under_four_characters_and_other_hosts_paths(
               _voice("https://g2.com/acme/reviews")]
     assert w.drop_sellers(voices, ["bob", "", "A c"]) == voices  # "bob" and "ac" are too short to match on
     assert [v["url"] for v in w.drop_sellers(voices, ["acme"])] == ["https://reddit.com/r/x/1", "https://g2.com/acme/reviews"]
+
+
+def test_x_system_paths_are_not_authors():
+    assert w._author("https://x.com/i/status/123") == ""
+    assert w._author("https://x.com/ada_l/status/123") == "ada_l"

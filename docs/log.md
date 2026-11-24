@@ -47,3 +47,5 @@ Format: `YYYY-MM-DD · <what was decided or changed> · <why>`
 2026-11-24 · Agreement gate judges only calls that could do harm (agreed vs wrong releases); held-but-approved is reported, not penalised · QA showed autopilot was unreachable because caution counted as error
 2026-11-24 · A credit for outreach is recorded only when mail left; graph.query recorded per lead · billing must match what happened
 2026-11-24 · App being reduced to one home screen with sections behind an icon rail, Pipeline tab removed; MCP server at /mcp exposes read tools plus find_leads, never decisions · user found the UI cluttered and asked for agent access
+2026-11-24 · A web lead with no named author is always held ("No named author, so there is nobody to write to"), in every mode; X system paths such as /i/ are not authors · planned, built and reviewed by four agents in Band (docs/band-run.md); only Reddit and X yield handles, so other web sources always hold
+2026-11-24 · Interface cut to three plain sections (Customer, People, Activity) on a paper ground; map, agent creatures, AI cursor, voice and icon rail deleted · the user could not read who the customer was through the clutter

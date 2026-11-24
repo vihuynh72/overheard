@@ -75,6 +75,14 @@ def _too_old(newest: str, limit: int, today: datetime.date) -> bool:
         return True
 
 
+def _no_named_author(lead: dict) -> bool:
+    # The store keeps no kind or author on signals, but an authorless web voice is keyed "web:<hex>"
+    # (scout_web.as_people) and a GitHub login cannot hold ":". Fresh signals still carry both fields.
+    if str(lead.get("login") or "").strip().lower().startswith("web:"):
+        return True
+    return any(s.get("kind") == "web" and not str(s.get("author") or "").strip() for s in lead.get("signals") or [])
+
+
 def decide(lead: dict, policy: dict, rules: list[dict], findings: list[dict],
            sent_today: int, today: datetime.date) -> dict:
     hits = [r for r in rules if rule_matches(r, lead)]
@@ -87,6 +95,8 @@ def decide(lead: dict, policy: dict, rules: list[dict], findings: list[dict],
         why.append(f"Score {lead.get('score', 0)} is below your minimum of {policy['min_score']}")
     if policy["require_verified_email"] and lead.get("email_status") != "valid":
         why.append("No verified email address")
+    if _no_named_author(lead):
+        why.append("No named author, so there is nobody to write to")
     if policy["require_production_use"] and not lead.get("production"):
         why.append("No sign of production use")
     if not lead.get("newest"):

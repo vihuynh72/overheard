@@ -3,6 +3,7 @@ import datetime
 import pytest
 
 from app.policy import DEFAULT_POLICY, decide, make_rule, rule_matches, suggest_rule, summarize, validate
+from app.scout_web import as_people
 
 TODAY = datetime.date(2026, 11, 24)
 
@@ -14,6 +15,7 @@ LEAD = {
     "signals": [{"repo": "getlago/lago", "title": "Metering lag", "excerpt": "events arrive late"}],
 }
 AUTOPILOT = {**validate({}), "mode": "autopilot", "approved_first_batch": True}
+NO_AUTHOR = "No named author, so there is nobody to write to"
 
 
 def run(lead=None, policy=None, rules=(), findings=(), sent=0):
@@ -33,6 +35,8 @@ def test_clean_release_in_autopilot():
     ({"findings": [{"login": "x", "rule": "placeholder", "detail": "d"}]}, "Failed self-check: placeholder"),
     ({"lead": {"score": 42}}, "Score 42 is below your minimum of 50"),
     ({"lead": {"email_status": "unknown"}}, "No verified email address"),
+    ({"lead": {"login": "web:3fa91c0b7e"}}, NO_AUTHOR),
+    ({"lead": {"signals": [{"repo": "reddit.com", "kind": "web", "author": ""}]}}, NO_AUTHOR),
     ({"policy": {"require_production_use": True}, "lead": {"production": False}}, "No sign of production use"),
     ({"lead": {"newest": "2020-01-01"}}, "Evidence is older than 730 days"),
     ({"lead": {"newest": "garbage"}}, "Evidence is older than 730 days"),
@@ -43,6 +47,38 @@ def test_clean_release_in_autopilot():
 ])
 def test_each_hold_branch(kwargs, reason):
     assert run(**kwargs) == {"action": "hold", "reasons": [reason]}
+
+
+@pytest.mark.parametrize("sig", [
+    {"repo": "reddit.com", "kind": "web", "author": ""},
+    {"repo": "reddit.com", "kind": "web", "author": "   "},
+    {"repo": "reddit.com", "kind": "web", "author": None},
+    {"repo": "reddit.com", "kind": "web"},
+])
+def test_web_signal_without_author_is_held(sig):
+    assert run(lead={"signals": [sig]}) == {"action": "hold", "reasons": [NO_AUTHOR]}
+    assert NO_AUTHOR in run(lead={"signals": [sig]}, policy={"mode": "supervised"})["reasons"]
+
+
+def test_crafted_name_and_login_cannot_hide_a_missing_author():
+    sig = {"repo": "reddit.com", "kind": "web", "author": ""}
+    got = run(lead={"name": "alice", "login": "reddit.com/u/alice", "signals": [sig]})
+    assert got == {"action": "hold", "reasons": [NO_AUTHOR]}
+
+
+def test_authorless_voice_from_the_scout_is_held_on_its_stored_shape():
+    # the key as_people really produces, with signals as store.leads() returns them (no kind or author)
+    voice = {"id": "web:3fa91c0b7e", "repo": "reddit.com", "author": "", "kind": "web"}
+    (login, _), = as_people([voice])
+    assert run(lead={"login": login}) == {"action": "hold", "reasons": [NO_AUTHOR]}
+    assert run(lead={"login": " WEB:3fa91c0b7e"})["reasons"] == [NO_AUTHOR]
+
+
+def test_authored_web_and_github_leads_release():
+    web = {"repo": "reddit.com", "kind": "web", "author": "alice"}
+    assert run(lead={"login": "reddit.com/u/alice", "signals": [web]})["action"] == "release"
+    assert run(lead={"login": "reddit.com/u/alice"})["action"] == "release"  # stored shape, authored
+    assert run()["action"] == "release"  # GitHub-style signal, no kind
 
 
 def test_other_leads_findings_are_ignored():
