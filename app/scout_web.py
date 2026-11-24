@@ -165,7 +165,7 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
                 continue
             if url in best and best[url]["match"] >= round(score, 2):
                 continue
-            best[url] = {"id": "web:" + hashlib.sha1(url.encode()).hexdigest()[:10], "repo": _host(url), "url": url,
+            best[url] = {"id": "web:" + hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()[:10], "repo": _host(url), "url": url,
                          "title": (r.get("title") or "").strip(), "body": content[:1500], "author": _author(url),
                          "created": _date(r["published_date"]) if r.get("published_date") else "",
                          "pain": q["pain"], "match": round(score, 2), "kind": "web"}

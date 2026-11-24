@@ -14,7 +14,12 @@ from fastapi.responses import FileResponse, RedirectResponse, Response  # noqa: 
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field, model_validator  # noqa: E402
 
-from app import autopilot, billing, gmail, intake, mailer, mcp_server, pipeline, policy, store, voice  # noqa: E402
+import logging  # noqa: E402
+
+# httpx logs every request URL at INFO, and Hunter takes its key in the query string: keep keys out of logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+from app import autopilot, billing, gmail, graphq, intake, mailer, mcp_server, pipeline, policy, store, voice  # noqa: E402
 
 app = FastAPI(title="Earshot", lifespan=mcp_server.lifespan)
 mcp_server.mount(app)  # /mcp: the same app for agents
@@ -83,6 +88,7 @@ def _run(description: str, product_repo: str, target: str = "") -> None:
         product_repo = product_repo or read["repo"]
     pipeline.run(description, product_repo, review=autopilot.review_drafts, sources=sources,
                  keep_log=sources is not None)
+    _graph.clear()  # the graph changed: the next read recomputes and meters the queries once
     try:
         autopilot.after_run()  # Reviewer, then Sender if autonomy has been earned
     except Exception as e:  # a failed review must not look like a clean run
@@ -133,6 +139,28 @@ def run(body: RunIn):
     return {"started": True}
 
 
+_graph: dict = {}  # cached graph insights for the current run; cleared when a run finishes
+
+
+def graph_insights() -> dict:
+    """Once per run (and once after startup): sync the derived edges, run the queries, meter each one."""
+    if pipeline.state["running"]:  # the graph is half rewritten mid-run; wait for the finished one
+        return {"counts": {}, "insights": [], "running": True}
+    if not _graph:
+        try:
+            g = graphq.insights(store.q, pipeline.load_icp() or {},
+                                on_query=lambda key: billing.record("graph.query", query=key))
+        except Exception as e:  # graph reasoning must never take /api/state down with it
+            return {"counts": {}, "insights": [], "error": f"{type(e).__name__}: {e}"}
+        _graph.update(g)
+    return _graph
+
+
+@app.get("/api/graph/insights")
+def get_graph_insights():
+    return graph_insights()
+
+
 @app.get("/api/state")
 def state():
     leads = store.leads()
@@ -141,7 +169,8 @@ def state():
             "floor": autopilot.floor(leads), "expansions": autopilot.load()["expansions"], "map": autopilot.market_map(leads),
             "billing": {**billing.balance(), "low_water": billing.LOW_WATER, "costs": billing.COSTS,
                         "ledger": billing.ledger()[:100], "by_lead": billing.cost_by_lead()},
-            "mail": {**gmail.status(), "resend": bool(os.environ.get("RESEND_API_KEY"))}}
+            "mail": {**gmail.status(), "resend": bool(os.environ.get("RESEND_API_KEY"))},
+            "graph": graph_insights()}
 
 
 @app.get("/api/gmail/connect")

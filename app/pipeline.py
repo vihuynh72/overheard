@@ -481,7 +481,6 @@ def run(description: str, product_repo: str = "", review=None, sources: list[str
                 store.link("Person", "login", lead["login"], "RAISED", "Signal", "id", s["id"])
                 store.link("Signal", "id", s["id"], "ABOUT", "Repo", "name", s["repo"])
             store.log(lead["login"], "agent", "matched", lead["reason"])
-            billing.record("graph.query", lead["login"])  # the graph writes and reads behind this lead
         left = checks.check_leads(store.leads(), store.STAGES)
         say(f"Reviewer: self-check found {len(left)} problems across {len(leads)} leads"
             + (f" ({', '.join(sorted({f['rule'] for f in left}))})" if left else ""))

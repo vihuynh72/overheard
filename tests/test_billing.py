@@ -5,7 +5,7 @@ import pytest
 
 from app import billing
 
-KEY = "fp-secret-key-123"
+KEY = "not-a-real-key"
 
 
 @pytest.fixture(autouse=True)

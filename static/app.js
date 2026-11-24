@@ -427,6 +427,8 @@ function activityView() {
 }
 // Findings computed from the map's edges; each is skipped when the data does not show it.
 function graphRows(d) {
+  // The server's multi-hop findings lead; the browser's own counts below fill in when they are absent.
+  const found = ((d.graph || {}).insights || []).filter(i => i.title && (i.rows || []).length);
   const m = d.map, E = m.edges || [], ids = xs => new Set((xs || []).map(x => x.id));
   const P = ids(m.people), C = ids(m.companies), R = new Map((m.repos || []).map(r => [r.id, r.kind])), pains = new Map((m.pains || []).map(p => [p.id, p.text]));
   const count = (pick) => { const c = new Map(); E.forEach(e => { const k = pick(e); if (k) c.set(k, (c.get(k) || 0) + 1); }); return [...c].sort((a, b) => b[1] - a[1]); };
@@ -438,6 +440,7 @@ function graphRows(d) {
     topPain && topPain[1] > 1 ? fact("Most voiced", esc(headline(pains.get(topPain[0]))), plural(topPain[1], "person", "people")) : "",
     topRepo ? fact("Competitor", `${topRepo[1]} of the ${people} were found complaining on <i>${esc(topRepo[0])}</i>`, "Competitor tracker") : "",
     ...shared.map(([c, k]) => fact("Company", `${k} people at <i>${esc(c)}</i>`, "One account")),
+    ...found.filter(i => i.key === "shared_pain" || i.key === "freshest").map(i => fact(i.key === "shared_pain" ? "Shared pain" : "Freshest", esc(i.title), "Graph query")),
   ].join("");
   return `<ul class="rows facts-rows">${fact("Counts", `<span class="num">${[plural(people, "person", "people"), plural(C.size, "company", "companies"), plural(R.size, "tracker", "trackers"), plural(pains.size, "pain", "pains"), plural(E.length, "link", "links")].join(" · ")}</span>`)}
     ${finds}${fact("Conversion", `<span class="conv">${stages.map(s => { const k = d.leads.filter(l => l.stage === s).length;

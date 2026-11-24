@@ -1,0 +1,67 @@
+# SCA, SAST and secret scanning on every push and pull request. See docs/security.md for what each finds today.
+name: security
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sca:
+    name: Dependencies (pip-audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit==2.10.1
+      - run: pip-audit -r requirements.txt
+
+  sast:
+    name: Code (bandit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install bandit==1.9.4
+      # Fails on medium or high severity; the low findings are listed in docs/security.md.
+      - run: bandit -r app scripts --severity-level medium
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  snyk:
+    # Runs only once a SNYK_TOKEN repository secret exists. `secrets` cannot be read in an `if`,
+    # so the job copies it into env and each step checks env instead.
+    name: Snyk (when SNYK_TOKEN is set)
+    runs-on: ubuntu-24.04
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        if: ${{ env.SNYK_TOKEN != '' }}
+      - uses: snyk/actions/python-3.10@0.4.0
+        if: ${{ env.SNYK_TOKEN != '' }}
+        with:
+          command: test
+          args: --file=requirements.txt --severity-threshold=high
+      - uses: snyk/actions/python-3.10@0.4.0
+        if: ${{ env.SNYK_TOKEN != '' }}
+        with:
+          command: code test
+          args: --severity-threshold=high
+      - if: ${{ env.SNYK_TOKEN == '' }}
+        run: echo "SNYK_TOKEN is not set, so Snyk was skipped. pip-audit, bandit and gitleaks still ran."

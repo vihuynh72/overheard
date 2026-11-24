@@ -13,7 +13,7 @@ _lock = threading.Lock()  # one connection shared by the API and the pipeline th
 
 STAGES = ["Matched", "Contacted", "Replied", "Meeting Booked", "Closed/Lost"]
 
-for ddl in [
+SCHEMA = [
     """CREATE NODE TABLE IF NOT EXISTS Person(login STRING PRIMARY KEY, name STRING, url STRING,
        company STRING, email STRING, blog STRING, bio STRING, location STRING, followers INT64,
        role STRING, fit INT64, production BOOLEAN, reason STRING, score INT64, tier STRING,
@@ -28,7 +28,14 @@ for ddl in [
     "CREATE REL TABLE IF NOT EXISTS WORKS_AT(FROM Person TO Company)",
     "CREATE REL TABLE IF NOT EXISTS RAISED(FROM Person TO Signal)",
     "CREATE REL TABLE IF NOT EXISTS ABOUT(FROM Signal TO Repo)",
-]:
+    # Derived by app/graphq.sync from the tables above; additive, so an existing graph file keeps working.
+    "CREATE NODE TABLE IF NOT EXISTS Product(name STRING PRIMARY KEY)",
+    "CREATE NODE TABLE IF NOT EXISTS Pain(text STRING PRIMARY KEY)",
+    "CREATE REL TABLE IF NOT EXISTS COMPETES_WITH(FROM Repo TO Product)",
+    "CREATE REL TABLE IF NOT EXISTS MATCHED_TO(FROM Person TO Product)",
+    "CREATE REL TABLE IF NOT EXISTS VOICED(FROM Person TO Pain)",
+]
+for ddl in SCHEMA:
     _conn.execute(ddl)
 
 
