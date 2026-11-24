@@ -27,11 +27,13 @@ window.EarshotAsk = (() => {
     s = m ? m[0] : s;
     return s.length > 320 ? s.slice(0, 317).replace(/\s+\S*$/, "") + "..." : s;
   };
+  // The why, as one sentence of at most 22 words: the rest waits behind "Why this person".
+  const short = s => { const w = sentence(s).split(" "); return w.length > 22 ? w.slice(0, 22).join(" ").replace(/[,;:]$/, "") + "…" : w.join(" "); };
   const dur = () => reduced.matches ? 0 : 240;
 
   // --- the surface, built once ---
-  let note, firstLead = true, root, chip, chipFace, chipName, chipCount, closeB, card, kicker, progress, person, question, why, evidence, subject, answers, yesB, noB, laterB,
-    follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume;
+  let note, root, chip, chipFace, chipName, chipCount, closeB, card, kicker, progress, person, question, why, evidence, subject, answers, yesB, noB, laterB,
+    follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume, whyMore, whyFull;
   function build() {
     root = el("section", "ask");
     root.setAttribute("aria-label", "Earshot needs you");
@@ -50,7 +52,10 @@ window.EarshotAsk = (() => {
     why = el("p", "ask-why");
     evidence = el("p", "ask-evidence");
     subject = el("div", "ask-letter");
-    note = el("p", "ask-note", "Goes to a test inbox, never to them.");
+    note = el("p", "ask-note", "Goes to a test inbox in this demo");
+    whyMore = el("details", "ask-whymore");
+    whyFull = el("p", "ask-why-full");
+    whyMore.append(el("summary", "", "Why this person"), person, whyFull);
 
     answers = el("div", "ask-answers");
     yesB = button("ask-btn ask-yes", "Yes", "Y");
@@ -85,7 +90,7 @@ window.EarshotAsk = (() => {
 
     errorP = el("p", "ask-error");
     errorP.setAttribute("role", "alert");
-    card.append(top, person, question, why, evidence, subject, note, answers, follow, errorP);
+    card.append(top, question, why, evidence, subject, answers, follow, note, whyMore, errorP);
 
     idle = el("p", "ask-idle", "Nothing needs you");
     // Collapsed, the card is a chip in the corner; it opens in place into the panel.
@@ -127,7 +132,8 @@ window.EarshotAsk = (() => {
   function expand(open) {
     root.classList.toggle("is-open", open);
     chip.setAttribute("aria-expanded", String(open));
-    (open ? (current && current.yesno ? yesB : card) : chip).focus({preventScroll: true});
+    if (open) fit();
+    (open ? card : chip).focus({preventScroll: true});  // never on Yes: a stray Enter must not send
   }
   function paintChip(item) {
     chipFace.replaceChildren();
@@ -171,7 +177,7 @@ window.EarshotAsk = (() => {
       face: l.login && !l.login.startsWith("web:") ? `https://github.com/${encodeURIComponent(l.login)}.png?size=64` : "",
       kicker: "Your decision",
       q: `Write to ${name}?`,
-      why: sentence(l.reason),
+      why: short(l.reason), reason: String(l.reason || ""), url: sig && /^https?:\/\//.test(sig.url || "") ? sig.url : "",
       evidence: sig ? [String(sig.title || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, ""), [sig.repo, whenText].filter(Boolean).join(", ")] : null,
       subject: l.subject || "", body: l.body || "",
       reasons: reasonsFor(l, company),
@@ -263,7 +269,7 @@ window.EarshotAsk = (() => {
 
   function progressText() {
     const total = batchDone + pendingLeads().length;
-    return total > 1 ? `${batchDone + 1} of ${total}` : "";
+    return total ? `${batchDone + 1} of ${total}` : "";
   }
 
   // --- showing: one authored motion in, the same motion out ---
@@ -281,11 +287,10 @@ window.EarshotAsk = (() => {
       render(item);
       card.hidden = false;
       root.dataset.state = "open";
-      const body = subject.querySelector(".ask-letter-body");
-      if (body) subject.classList.toggle("is-long", body.scrollHeight > body.clientHeight + 4);
+      fit();
       void card.offsetWidth;                      // commit the start state so the arrival animates
       card.classList.add("is-in");
-      if (hadFocus && root.classList.contains("is-open")) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
+      if (hadFocus && root.classList.contains("is-open")) (item.yesno ? card : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
       if (item.kind === "lead" && actions.open) { try { actions.open(item.login); } catch { /* the card still works without the page behind it */ } }
       if (item.kind === "brief") { asked.add(item.key); briefTimer = setTimeout(() => { if (current === item) finish(); }, BRIEF_MS); }
       if (item.kind === "stop") asked.add(item.key);
@@ -293,11 +298,21 @@ window.EarshotAsk = (() => {
     wasIn ? setTimeout(fill, dur()) : fill();
   }
 
+  // The letter shows whole when the panel fits the screen; only when it does not, it folds with "Read all".
+  function fit() {
+    if (!card || subject.classList.contains("is-open")) return;
+    subject.classList.remove("is-long");
+    if (card.getClientRects().length && card.scrollHeight > card.clientHeight + 4) subject.classList.add("is-long");
+  }
+
   function render(item) {
-    kicker.textContent = item.kicker;
+    kicker.textContent = item.kind === "lead" ? "" : item.kicker;
+    kicker.hidden = item.kind === "lead";
     progress.textContent = item.kind === "lead" ? progressText() : "";
     person.replaceChildren();
-    person.hidden = item.kind !== "lead";
+    whyMore.hidden = item.kind !== "lead";
+    whyMore.open = false;
+    whyFull.textContent = item.reason || "";
     if (item.kind === "lead") {
       const av = el("span", "av");
       av.append(el("span", "av-i", String(item.name).split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("")));
@@ -312,8 +327,10 @@ window.EarshotAsk = (() => {
     evidence.replaceChildren();
     evidence.hidden = !item.evidence;
     if (item.evidence) {
-      evidence.append(el("span", "ask-label", "They wrote"), el("q", "ask-title", item.evidence[0]));
-      if (item.evidence[1]) evidence.append(el("span", "ask-where", item.evidence[1]));
+      const said = el("q", "ask-title", item.evidence[0]);
+      evidence.append(el("span", "ask-label", "They wrote"), item.url ? Object.assign(el("a", "ask-src"), {href: item.url, target: "_blank", rel: "noopener"}) : said);
+      if (item.url) evidence.lastChild.append(said);
+      if (item.evidence[1]) evidence.append(el("span", "ask-where", item.evidence[1] + (item.url ? " ↗" : "")));
     }
     // The draft is shown as the letter it will be, so the decision is made on what will be sent.
     subject.replaceChildren();
@@ -325,9 +342,9 @@ window.EarshotAsk = (() => {
       const more = button("ask-link ask-more", "Read all");
       more.addEventListener("click", () => { subject.classList.add("is-open"); more.remove(); });
       subject.append(el("p", "ask-label", "The message"), msg, more);
+      more.setAttribute("aria-label", "Read the whole message");
     }
-    note.hidden = !(item.kind === "lead" && firstLead);
-    if (item.kind === "lead") firstLead = false;
+    note.hidden = item.kind !== "lead";
     yesB.hidden = noB.hidden = laterB.hidden = !item.yesno;
     yesB.querySelector(".ask-btn-label").textContent = item.kind === "lead" ? "Yes, send it" : "Yes";
     fixB.hidden = !item.fix;

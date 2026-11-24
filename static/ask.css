@@ -46,9 +46,19 @@ body.is-fresh .ask, .ask[data-empty="true"] { display: none; }
 .ask-why[hidden], .ask-evidence[hidden], .ask-letter[hidden], .ask-note[hidden] { display: none; }
 
 .ask-letter { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-rule); }
-.ask-letter-body { margin-top: var(--space-2); max-height: 11rem; overflow: auto; font-size: var(--text-sm); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-letter-body { margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ask-letter-subj { display: block; margin-bottom: var(--space-2); font-weight: 600; }
 .ask-more { display: none; }
+.ask-letter.is-long:not(.is-open) .ask-letter-body { max-height: 11rem; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.ask-letter.is-long:not(.is-open) .ask-more { display: inline-block; }
+.ask-kicker[hidden] { display: none; }
+.ask-src { flex-basis: 100%; color: inherit; text-decoration: none; }
+.ask-src:hover .ask-title { text-decoration: underline; text-decoration-color: var(--color-rule); }
+.ask-whymore { margin-top: var(--space-4); font-size: var(--text-sm); color: var(--color-muted); }
+.ask-whymore[hidden] { display: none; }
+.ask-whymore summary { cursor: pointer; width: max-content; }
+.ask-whymore summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.ask-why-full { margin: var(--space-2) 0 0; }
 .ask-note { margin: var(--space-3) 0 0; font-size: var(--text-xs); color: var(--color-muted); }
 
 .ask-answers { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); }
