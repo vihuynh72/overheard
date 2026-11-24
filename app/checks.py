@@ -28,7 +28,7 @@ def check_leads(leads: list[dict], stages: list[str]) -> list[dict]:
         if not lead.get("reason"):
             flag("no_reason", "reason is empty")
         subject, body = lead.get("subject") or "", lead.get("body") or ""
-        if not subject or not body:
+        if (not subject or not body) and lead.get("draft_status") != "no_author":  # nobody to write to, so no draft is right
             flag("empty_draft", "subject or body is empty")
         if len(subject.split()) > 12:
             flag("long_subject", f"{len(subject.split())} words, max 12")

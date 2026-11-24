@@ -242,7 +242,7 @@ function detail() {
       ${l.signals.map(s => `<article class="signal"><a href="${safeUrl(s.url)}" target="_blank" rel="noopener">${esc(s.title)}${EXT}</a>
         <p class="meta num">${esc(s.repo)} · ${esc(s.created)}</p>
         <blockquote>${esc(s.excerpt)}${s.excerpt.length >= 300 ? "…" : ""}</blockquote></article>`).join("")}</section>
-    <section class="block"><h3>Draft${done ? ` · ${esc(l.draft_status)} by ${esc(who(l.stage_actor))}` : ""}</h3>
+    ${l.draft_status === "no_author" ? `<section class="block"><h3>No message</h3><p class="hint">This post has no named author, so there is nobody to write to. It is kept as evidence of the problem.</p></section>` : `<section class="block"><h3>Draft${done ? ` · ${esc(l.draft_status)} by ${esc(who(l.stage_actor))}` : ""}</h3>
       <div class="field"><label for="subj">Subject</label><input type="text" id="subj" maxlength="300" value="${esc(l.subject)}" ${done ? "disabled" : ""}></div>
       <div class="field"><label for="bodyTxt">Message</label><textarea id="bodyTxt" rows="9" maxlength="5000" ${done ? "disabled" : ""}>${esc(l.body)}</textarea></div>
       ${done ? "" : ui.rejecting
@@ -250,7 +250,7 @@ function detail() {
            <div class="actions"><button type="button" class="btn danger" data-act="reject">Reject lead</button><button type="button" class="btn quiet" data-act="cancel">Keep</button></div>`
         : `<div class="actions"><button type="button" class="btn" data-act="approve">Approve</button><button type="button" class="btn quiet" data-act="start-reject">Reject</button></div>
            <p class="hint">Goes to the demo inbox, never to the lead.</p>`}
-    </section>`;
+    </section>`}`;
   if (ui.rejecting) $("why")?.focus();
 }
 
@@ -260,7 +260,7 @@ function trustBlock(trust) {
   const i = LEVELS.indexOf(level), up = i >= 0 && i < LEVELS.length - 1 ? LEVELS[i + 1] : null, target = up || (i > 0 ? LEVELS[i - 1] : null);
   const why = level === "autopilot" ? "Earshot may send on its own while every check holds." : (trust.blocked_by || []).length ? `Autopilot is not available yet: ${trust.blocked_by.join("; ")}.` : met === gates.length && gates.length ? "Every check holds; you can ask for more autonomy." : "Autopilot waits until every check passes.";
   return fold("trust", "Trust", `${esc(level[0].toUpperCase() + level.slice(1))} · <span class="num">${met} of ${gates.length}</span> checks passed`,
-    `<ul class="ruled">${gates.map(g => `<li class="gate"><span>${esc(g.label)}</span><span class="num muted">${esc(g.value ?? "–")} / ${esc(g.target ?? "–")}</span><span class="${g.passed ? "ok" : "no"}">${g.passed ? "Passed" : "Not yet"}</span></li>`).join("")}</ul>
+    `<ul class="ruled">${gates.map(g => `<li class="gate"><span>${esc(g.label)}</span><span class="num muted">${esc(g.value ?? "–")}</span><span class="${g.passed ? "ok" : "no"}">${g.passed ? "Passed" : "Not yet"}</span></li>`).join("")}</ul>
      <p class="muted">${esc(why)}</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up ? "Request " : "Step back to "}${target}</button></div>` : ""}`, true);
 }
 

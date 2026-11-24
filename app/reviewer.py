@@ -99,3 +99,74 @@ def snap_judge(state: str, questions: dict[str, str], *, client: httpx.Client | 
     answers = r.json()["answers"]
     probs = {i: float((answers.get(i) or {}).get("noul", 0.0)) for i in sent}
     return {**{i: 0.0 for i in questions}, **probs}  # questions past the cap fail closed
+
+
+# --- Repair: what the checks above detect, these fix, each within a fixed bound ---------------
+
+MAX_REWRITES_PER_DRAFT = 1  # exit condition: one rewrite and one re-review, then the first verdict stands
+_NUMBER = re.compile(r"[$€£]\s?\d[\d,.]*\s?[kmb]?(?!\w)|\d[\d,.]*\s?%|\d[\d,.]*", re.I)
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", text.lower()))
+
+
+def full_evidence(lead: dict) -> dict:
+    """The lead as the Reviewer must see it: each signal's whole text, not the stored 300-character excerpt."""
+    return {**lead, "signals": [{**s, "excerpt": s.get("body", s.get("excerpt", ""))} for s in lead.get("signals") or []]}
+
+
+def guard(body: str, lead: dict) -> tuple[str, list[str]]:
+    """Drop sentences about the recipient that state a number, percentage, money amount or date the evidence lacks.
+
+    No model: a figure the person never wrote cannot be true of them. Conservative by design: only digit and
+    currency patterns, and a draft left with fewer than two sentences is returned untouched for the Reviewer.
+    """
+    seen = _plain(evidence(lead))
+    removed = [s for s in split(body) if about_recipient(s, lead) and any(
+        not re.search(rf"(?<!\w){re.escape(_plain(m.group()).strip())}(?!\w)", seen)
+        for m in _NUMBER.finditer(s) if _plain(m.group()).strip())]
+    removed = [s for s in removed if s in body]  # only what can be cut out exactly
+    if not removed:
+        return body, []
+    out = body
+    for s in removed:
+        out = out.replace(s, "", 1)
+    out = re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t]+\n", "\n", re.sub(r"[ \t]{2,}", " ", out))).strip()
+    if len(split(out)) < 2:
+        return body, []
+    return out, removed
+
+
+def repair(leads: list[dict], reviews: dict, rewrite, judge) -> dict:
+    """Rewrite each draft the Reviewer failed, from the evidence; keep a rewrite only if a fresh review passes it.
+
+    `rewrite(lead, flagged) -> (subject, body)` is injected. A rewrite that fails, raises or comes back
+    unchecked leaves the lead's draft and its first review exactly as they were, so the hold stands.
+    Mutates `leads` (subject, body) and `reviews` (the repaired record) in place; never raises.
+    """
+    passed = held = 0
+    for lead in leads:
+        first = reviews.get(lead.get("login", ""))
+        if not first or first.get("verdict") != "fail":
+            continue
+        view, flagged, ok = full_evidence(lead), first.get("unsupported") or [], None
+        for _ in range(MAX_REWRITES_PER_DRAFT):
+            try:
+                subject, body = rewrite(view, flagged)
+                if not (subject or "").strip() or not (body or "").strip():
+                    break  # an empty draft passes review trivially; it is not a repair
+                again = review({**view, "subject": subject, "body": body}, judge)
+            except Exception:
+                break
+            if again["verdict"] == "pass":
+                ok = (subject, body, again)
+                break
+            flagged = again["unsupported"]
+        if ok:
+            lead["subject"], lead["body"] = ok[0], ok[1]
+            reviews[lead["login"]] = {**first, **ok[2], "repaired": True, "removed": first.get("unsupported") or []}
+            passed += 1
+        else:
+            held += 1
+    return {"rewritten": passed + held, "passed": passed, "held": held}

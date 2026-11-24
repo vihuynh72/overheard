@@ -98,3 +98,11 @@ def test_rediscovery_only_counts_top_k():
 
 def test_rediscovery_empty_known():
     assert rediscovery(["A"], [], 5) == {"k": 5, "known": 0, "found": [], "missed": [], "recall": 0.0}
+
+
+def test_no_author_lead_needs_no_draft():
+    from app import checks
+    lead = {"login": "web:abc", "name": "reddit.com", "score": 30, "tier": "C", "reason": "r", "subject": "", "body": "",
+            "draft_status": "no_author", "signals": [{"url": "https://reddit.com/r/x/1", "title": "t", "excerpt": "e", "match": 0.5}]}
+    assert not [f for f in checks.check_leads([lead], ["Matched"]) if f["rule"] == "empty_draft"]
+    assert [f for f in checks.check_leads([{**lead, "draft_status": "pending"}], ["Matched"]) if f["rule"] == "empty_draft"]

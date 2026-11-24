@@ -13,7 +13,7 @@ import httpx
 from moss import DocumentInfo, MossClient, QueryOptions
 from pydantic import BaseModel
 
-from app import billing, checks, enrich, scoring, scout_web, store
+from app import billing, checks, enrich, reviewer, scoring, scout_web, store
 
 MODEL = os.getenv("LLM_MODEL", "claude-sonnet-5-5")
 INDEX = "issues"
@@ -141,6 +141,19 @@ Then draft a first outreach email: subject under 8 words, body under 90 words, p
 Refer to the problem they described in their own issue. State nothing about them or their company
 that the evidence does not show. No flattery, no fake familiarity, one clear ask.
 End after the ask: no sign-off, no signature, and no bracketed placeholders such as [Name]."""
+
+
+class Rewrite(BaseModel):
+    subject: str
+    body: str
+
+
+REWRITE_SYSTEM = """You rewrite one outreach email so that it says only what the evidence shows.
+You are given the evidence (what this person wrote in public), your earlier draft, and the sentences
+an independent reviewer found the evidence does not support. Remove or soften each flagged sentence.
+Add no new claim about the person, their company, their numbers or their timeline. Keep the same
+voice, the same ask and the same subject unless the subject itself overreaches; keep it short.
+No sign-off, no signature, no bracketed placeholders."""
 
 
 # --- GitHub ----------------------------------------------------------------
@@ -327,6 +340,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         web = signals[0].get("kind") == "web"
         company = (profile.get("company") or "").lstrip("@").strip()
         name = profile.get("name") or (signals[0]["author"] or signals[0]["repo"] if web else "")
+        no_author = login.startswith("web:")  # scout_web.as_people keys an authorless post by its id
         if ql.fit < MIN_FIT:
             weak += 1
             continue
@@ -357,19 +371,23 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
             blog=profile.get("blog"), bio=profile.get("bio"), location=profile.get("location"),
             followers=profile.get("followers") or 0, role=ql.role, fit=ql.fit, production=ql.production_user,
             reason=ql.reason, score=score, tier=scoring.tier(score), stage="Matched", stage_actor="agent",
-            subject=ql.subject, body=ql.body, draft_status="pending", signals=signals, _prompt=prompt))
+            subject="" if no_author else ql.subject, body="" if no_author else ql.body,
+            draft_status="no_author" if no_author else "pending", signals=signals, _prompt=prompt))
 
     verified = sum(1 for l in leads if l["email_status"] == "valid")
     say(f"Enricher → Writer: {len(leads)} leads kept, {verified} with an address verified by Hunter")
     say(f"Writer → Reviewer: {len(leads)} messages drafted from each person's own words")
     if weak:
         say(f"Qualifier: dropped {weak} people whose issue does not show a problem this product solves")
+    if authorless := sum(1 for l in leads if l["draft_status"] == "no_author"):
+        say(f"Writer: wrote nothing for {authorless} posts with no named author; there is nobody to write to, "
+            "so they are kept as evidence only")
 
     # Check, then fix once. A draft that still breaks a rule after one retry is left for the human to see.
     fixable = {"placeholder", "long_body", "long_subject", "empty_draft"}
     broken = {}
     for f in checks.check_leads(leads, store.STAGES):
-        if f["rule"] in fixable:
+        if f["rule"] in fixable and not f["login"].startswith("web:"):
             broken.setdefault(f["login"], []).append(f"{f['rule']}: {f['detail']}")
     if broken:
         say(f"Reviewer → Writer: {len(broken)} drafts broke a writing rule; rewriting each once")
@@ -381,6 +399,13 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
 
         with ThreadPoolExecutor(8) as pool:
             list(pool.map(redraft, [l for l in leads if l["login"] in broken]))
+    cut = 0
+    for lead in leads:  # before the Reviewer: a figure the person never wrote cannot be true of them
+        lead["body"], lead["_guard_removed"] = reviewer.guard(lead["body"], reviewer.full_evidence(lead))
+        cut += bool(lead["_guard_removed"])
+    if cut:
+        say(f"Reviewer: removed {sum(len(l['_guard_removed']) for l in leads)} sentences stating a number the person "
+            f"never wrote, from {cut} drafts")
     for lead in leads:
         lead.pop("_prompt")
         for s in lead["signals"]:
@@ -390,6 +415,38 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     if sources is not None:
         out["sources"] = sources  # the pages the description was read from
     return out, leads
+
+
+def rewrite(lead: dict, flagged: list[str]) -> tuple[str, str]:
+    """The Writer, once more, held to the evidence and the Reviewer's flagged sentences."""
+    got = ask(Rewrite, REWRITE_SYSTEM, f"Evidence:\n{reviewer.evidence(lead)}\n\nYour draft:\nSubject: {lead['subject']}\n"
+              f"{lead['body']}\n\nSentences the evidence does not support:\n" + "\n".join(f"- {s}" for s in flagged))
+    broke = [f for f in checks.check_leads([{**lead, "subject": got.subject, "body": got.body}], store.STAGES)
+             if f["rule"] in ("placeholder", "long_body", "long_subject", "empty_draft")]
+    if broke:
+        raise ValueError(f"rewrite broke a writing rule: {broke[0]['rule']}")
+    return got.subject, got.body
+
+
+def repair_drafts(leads: list[dict], judge=None) -> None:
+    """After the Reviewer's first pass: rewrite each failed draft once and keep it only if a second review passes.
+
+    Never raises: if anything here fails, the first-pass reviews and their holds stand.
+    """
+    from app import autopilot  # autopilot imports this module
+    try:
+        st = autopilot.load()
+        for lead in leads:
+            if lead.get("_guard_removed") and lead["login"] in st["reviews"]:
+                st["reviews"][lead["login"]]["guard_removed"] = lead["_guard_removed"]
+        n = reviewer.repair(leads, st["reviews"], rewrite, judge or reviewer.snap_judge)
+        autopilot.save(st)
+    except Exception as e:  # contract: the run never fails here
+        say(f"Reviewer: could not try rewrites ({type(e).__name__}); the first review stands")
+        return
+    if n["rewritten"]:
+        say(f"Reviewer → Writer: {n['rewritten']} drafts claimed more than the evidence shows; rewrote them from "
+            f"the evidence. {n['passed']} now pass, {n['held']} held for you.")
 
 
 def run(description: str, product_repo: str = "", review=None, sources: list[str] | None = None,
@@ -402,6 +459,9 @@ def run(description: str, product_repo: str = "", review=None, sources: list[str
         json.dump(icp, open(ICP_PATH, "w"), indent=2)
         if review:
             review(leads)  # while the leads still carry the full issue text the Writer saw
+            repair_drafts(leads)
+        for lead in leads:
+            lead.pop("_guard_removed", None)
         store.reset()
         for repo, kind in icp["repos"].items():
             store.upsert("Repo", "name", dict(name=repo, kind=kind))
