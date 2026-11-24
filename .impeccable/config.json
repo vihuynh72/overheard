@@ -13,6 +13,14 @@
         "rule": "overused-font",
         "value": "inter",
         "createdAt": "2026-11-24T22:05:47.498Z"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "static/index.html"
+        ],
+        "createdAt": "2026-11-24T23:06:40.721Z"
       }
     ]
   }
