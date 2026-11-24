@@ -9,6 +9,7 @@ from app import sources
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):  # the default path reaches Hacker News and Reddit; no test may
     monkeypatch.setattr(sources, "hn_voices", lambda pains: [])
+    monkeypatch.setattr(sources, "so_voices", lambda pains: [])
     monkeypatch.setattr(sources, "reddit_post", lambda url: None)
 
 LONG = "We keep chasing late invoices by hand and our usage billing is a spreadsheet nightmare every month. " * 2
@@ -299,3 +300,82 @@ def test_build_leads_turns_an_hn_voice_into_a_named_drafted_lead(monkeypatch):
     assert lead["draft_status"] == "pending" and lead["body"] and lead["email"] == ""
     assert not any(a[0] == "ada" for a in enriched)  # a username is never sent to Hunter as a name
     assert any("1 Hacker News posts" in x for x in said)
+
+
+def _so(**kw):
+    return {"id": "web:so1", "repo": "stackoverflow.com", "url": "https://stackoverflow.com/questions/1/x", "title": "t",
+            "body": LONG, "author": "Grace H", "created": "2026-01-02", "pain": "p", "match": 0.5, "kind": "web",
+            "profile": "https://stackoverflow.com/users/42/grace-h", "login": "so:42", **kw}
+
+
+def test_as_people_names_a_stack_overflow_author_and_policy_does_not_hold_it():
+    from app.policy import _no_named_author
+    [(login, signals)] = w.as_people([_so()])
+    assert login == "so:42" and signals[0]["author"] == "Grace H"
+    assert signals[0]["profile"] == "https://stackoverflow.com/users/42/grace-h"
+    assert not _no_named_author({"login": login, "signals": signals})
+    assert not _no_named_author({"login": login})
+
+
+def test_more_sources_merge_dedupe_by_url_and_one_failing_never_affects_another():
+    def boom(pains):
+        raise RuntimeError("down")
+    url = _so()["url"]
+    got = w.find_voices(["p"], search=fake([hit(url, 0.9)]), domains=["stackoverflow.com"],
+                        more=[boom, lambda pains: [_so()]])
+    assert [v["url"] for v in got] == [url] and got[0]["login"] == "so:42"  # one voice; the structured record wins
+
+
+def test_injected_search_reaches_no_extra_source():
+    assert w.find_voices(["p"], search=fake([])) == []
+
+
+def test_drop_sellers_checks_the_stack_overflow_display_name():
+    assert w.drop_sellers([_so(author="Flexprice Team"), _so()], ["Flexprice"]) == [_so()]
+
+
+def test_build_leads_carries_a_github_wide_person_and_a_stack_overflow_person(monkeypatch):
+    from app import pipeline
+    s_ = pipeline.Scored(values=["x"], confidence=0.9)
+    icp = pipeline.ICP(product="P", industries=s_, company_size=s_, personas=s_, triggers=s_,
+                       pains=["metering events double counted"], negative_signals=[], expansion=[], competitors=[],
+                       tracker_fit=True, tracker_fit_reason="ok", channels=[], process_areas=[])
+    wide_item = {"html_url": "https://github.com/acme/shop/issues/9", "number": 9, "title": "double counted",
+                 "body": LONG, "user": {"login": "wideuser", "type": "User"}, "author_association": "NONE",
+                 "created_at": "2026-10-01T00:00:00Z", "repository_url": "https://api.github.com/repos/acme/shop"}
+    asked = []
+
+    def gh(path, **k):
+        asked.append((path, k))
+        if path == "/search/issues":
+            return {"items": [wide_item]}
+        return {"name": "Wide User", "company": "Acme", "html_url": "https://github.com/wideuser"} if path == "/users/wideuser" else {}
+    matched = []
+
+    async def match(issues, *a):
+        matched.extend(i["id"] for i in issues)
+        return {"acme/shop#9": ("metering events double counted", 0.8)}
+    enriched = []
+    monkeypatch.setattr(pipeline, "gh", gh)
+    monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: [])
+    monkeypatch.setattr(pipeline, "match_pains", match)
+    monkeypatch.setattr(sources, "so_voices", lambda pains: [_so()])
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: enriched.append(a) or {"email": "w@acme.com", "email_status": "valid", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
+    monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "ask", lambda schema, system, user: icp if schema is pipeline.ICP else pipeline.Qualification(
+        fit=80, production_user=False, role="r", reason="r", subject="Short subject", body="Short body."))
+    said = []
+    _, leads = pipeline.build_leads("a product description long enough", "o/r", say=said.append)
+    by = {l["login"]: l for l in leads}
+    wide, so = by["wideuser"], by["so:42"]
+    assert matched == ["acme/shop#9"]  # the meaning match decides, as for a tracker issue
+    assert wide["name"] == "Wide User" and wide["url"] == "https://github.com/wideuser" and wide["email"] == "w@acme.com"
+    assert wide["signals"][0]["url"] == "https://github.com/acme/shop/issues/9" and enriched[0][0] == "Wide User"
+    assert so["name"] == "Grace H" and so["url"] == "https://stackoverflow.com/users/42/grace-h"
+    assert so["signals"][0]["url"] == "https://stackoverflow.com/questions/1/x"
+    assert so["draft_status"] == "pending" and so["body"] and so["email"] == ""
+    assert any("1 issues from across GitHub, beyond the trackers" in x for x in said)
+    assert any("1 Stack Overflow questions, each with its author and date" in x for x in said)
+    assert sum(p == "/search/issues" for p, _ in asked) == 1

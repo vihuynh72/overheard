@@ -287,6 +287,19 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         found = fetch_issues(repo)
         say(f"Scout: {repo} has {len(found)} issues from outside users")
         issues += found
+    sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
+    try:  # the same pains, asked of every public repository; these join the trackers' issues for the meaning match
+        wide = scout_web.sources.github_wide_voices(icp.pains, get=gh, skip_repos=repos,
+                                                    sellers=sellers + [r.split("/")[0] for r in repos])
+    except Exception:
+        wide = []
+    seen = {i["id"] for i in issues}
+    wide = [i for i in wide if i["id"] not in seen]
+    if wide:
+        say(f"Scout: {len(wide)} issues from across GitHub, beyond the trackers it was watching")
+        issues += wide
+    if scout_web.sources.last.get("gh_failed"):
+        say(f"Scout: {scout_web.sources.last['gh_failed']} of {scout_web.sources.last['gh_requests']} GitHub-wide searches failed; those were not heard")
     learned: list[str] = []
 
     def refine(best, issues_by_id):  # the Planner wrote its statements before seeing one real post
@@ -314,11 +327,14 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         say(f"Scout: {hn_found} Hacker News posts, each with its author and date")
     if src["hn_failed"]:
         say(f"Scout: {src['hn_failed']} of {src['hn_requests']} Hacker News searches failed; those were not heard")
+    if so_found := sum(1 for v in voices if v["repo"] == "stackoverflow.com" and v.get("login")):
+        say(f"Scout: {so_found} Stack Overflow questions, each with its author and date")
+    if src.get("so_failed"):
+        say(f"Scout: {src['so_failed']} of {src['so_requests']} Stack Overflow searches failed; those were not heard")
     if src["reddit_ok"]:
         say(f"Scout: read the author and date of {src['reddit_ok']} Reddit posts from Reddit itself")
     if src["reddit_blocked"]:
         say("Scout: Reddit refused a request, so the remaining Reddit posts keep no named author")
-    sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
     kept = scout_web.drop_sellers(voices, sellers)
     if len(kept) < len(voices):
         say(f"Scout: dropped {len(voices) - len(kept)} posts written by the product's own company or its competitors")

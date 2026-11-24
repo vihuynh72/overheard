@@ -167,6 +167,43 @@ def understand(body: TargetIn):
         return {**out, "understanding": None, "reason": "could not work out what that site sells"}
 
 
+class ProfileIn(TargetIn):
+    focus: str = RunIn.model_fields["focus"]
+    _plain_focus = field_validator("focus")(RunIn._plain_focus.__func__)
+
+
+MAX_PROFILES_PER_HOUR = 12
+_profiles: deque[float] = deque()  # time.monotonic() of each profile in the last hour
+
+
+@app.post("/api/profile")
+def profile(body: ProfileIn):
+    """The customer profile alone, for a product whose buyers do not write in public. Starts no run, stores nothing, spends no credits."""
+    try:
+        n = intake.normalize(body.target)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    with _start_lock:
+        now = time.monotonic()
+        while _profiles and now - _profiles[0] >= 3600:
+            _profiles.popleft()
+        if len(_profiles) >= MAX_PROFILES_PER_HOUR:
+            raise HTTPException(429, f"This copy works out {MAX_PROFILES_PER_HOUR} profiles an hour. "
+                                     f"Try again in {_wait_phrase(3600 - (now - _profiles[0]))}.")
+        _profiles.append(now)
+    read = intake.read_product(body.target)
+    if read["status"] != "ok":
+        return {"site": n["url"], "icp": None, "reason": read["reason"]}
+    description = read["source_text"]
+    if body.focus:  # the same first line a run would give the Planner
+        description = f"The founder confirmed the product to find customers for is: {body.focus}.\n\n{description}"
+    try:
+        icp = pipeline.ask(pipeline.ICP, pipeline.ICP_SYSTEM, description)
+    except Exception:  # no exception text reaches the page
+        return {"site": n["url"], "icp": None, "reason": "could not work out who buys this"}
+    return {"site": n["url"], "icp": icp.model_dump(), "fit": icp.tracker_fit, "reason": icp.tracker_fit_reason}
+
+
 @app.post("/api/run", status_code=202)
 def run(body: RunIn):
     """The one way a run starts: the web route and the MCP tool find_leads both come here."""

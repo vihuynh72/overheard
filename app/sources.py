@@ -29,7 +29,8 @@ much every each always never really""".split())
 
 SELLER_TITLE = re.compile(r"^\s*(show|launch) hn\b", re.I)
 
-last = {"hn_requests": 0, "hn_failed": 0, "reddit_ok": 0, "reddit_blocked": False}
+last = {"hn_requests": 0, "hn_failed": 0, "reddit_ok": 0, "reddit_blocked": False,
+        "gh_requests": 0, "gh_failed": 0, "so_requests": 0, "so_failed": 0}
 
 
 def keywords(pain: str, n: int = 3) -> list[str]:
@@ -141,3 +142,104 @@ def unlock(url: str, *, post=httpx.post) -> str | None:
     if r.status_code >= 400 or any(s in body[:500].lower() for s in ("bad_endpoint", "kyc", "zone not found")):
         return None
     return body
+
+
+GH_REPO = re.compile(r"/repos/([^/]+)/([^/]+)$")
+MAINTAINERS = ("MEMBER", "OWNER", "COLLABORATOR")
+MAX_WIDE = 60  # issues added to the meaning match per run
+
+
+def github_wide_voices(pains: list[str], *, get=None, skip_repos=(), sellers=(), max_queries: int = 5,
+                       per_query: int = 15, now=None) -> list[dict]:
+    """Issues from every public GitHub repository that use a pain's keywords, in the tracker-issue shape.
+
+    They join the tracker issues, so the meaning match decides relevance and the author is looked up, scored and
+    enriched exactly like a tracker lead. `get(path, **params)` returns parsed JSON or None (pipeline.gh).
+    """
+    last.update(gh_requests=0, gh_failed=0)
+    if get is None:
+        from app.pipeline import gh as get  # at call time: pipeline imports this module through scout_web
+    since = datetime.fromtimestamp((now or time.time()) - TWO_YEARS, timezone.utc).strftime("%Y-%m-%d")
+    skip = {str(r).lower() for r in skip_repos}
+    names = [n for n in (re.sub(r"[^a-z0-9]", "", str(s).lower()) for s in sellers) if len(n) >= 4]
+    out: dict[str, dict] = {}
+    for pain in [p for p in pains if p.strip()][:max_queries]:
+        kws = keywords(pain)
+        if len(kws) < 2:
+            continue
+        last["gh_requests"] += 1
+        try:
+            res = get("/search/issues", q=f"{' '.join(kws)} is:issue in:title,body created:>={since}", per_page=per_query)
+            if res is None:  # pipeline.gh answers None for anything but a 200
+                raise LookupError("search refused")
+            items = res.get("items")
+        except Exception:  # counted, never raised: a refused search must not stop a run
+            last["gh_failed"] += 1
+            continue
+        for i in items or []:
+            try:
+                user = i.get("user") or {}
+                login, m = (user.get("login") or "").strip(), GH_REPO.search(i.get("repository_url") or "")
+                body = _text(re.sub(r"(?s)<!--.*?-->", " ", i.get("body") or ""))
+                # Pull requests, bots and maintainers are not buyers; a short body shows no problem.
+                if ("pull_request" in i or not login or not m or login.endswith("[bot]") or user.get("type") == "Bot"
+                        or i.get("author_association") in MAINTAINERS or len(body) < MIN_TEXT):
+                    continue
+                repo = f"{m[1]}/{m[2]}"
+                handles = [re.sub(r"[^a-z0-9]", "", h.lower()) for h in (m[1], login)]
+                if repo.lower() in skip or any(n in h for n in names for h in handles):
+                    continue
+                out.setdefault(i["html_url"], dict(id=f"{repo}#{i['number']}", repo=repo, url=i["html_url"],
+                                                   title=_text(i.get("title") or ""), body=body[:1500], author=login,
+                                                   created=(i.get("created_at") or "")[:10]))
+            except Exception:  # one malformed item is skipped, not the search
+                continue
+    return list(out.values())[:MAX_WIDE]
+
+
+SO_SEARCH = "https://api.stackexchange.com/2.3/search/advanced"
+
+
+def so_voices(pains: list[str], *, get=httpx.get, max_queries: int = 4, per_query: int = 10, now=None) -> list[dict]:
+    """Stack Overflow questions from the last two years that use a pain's keywords, each with its author and date."""
+    last.update(so_requests=0, so_failed=0)
+    since = int((now or time.time()) - TWO_YEARS)
+    best: dict[str, dict] = {}
+    for pain in [p for p in pains if p.strip()][:max_queries]:
+        kws = keywords(pain)
+        if len(kws) < 2:
+            continue
+        last["so_requests"] += 1
+        try:
+            r = get(SO_SEARCH, params={"order": "desc", "sort": "relevance", "q": " ".join(kws), "site": "stackoverflow",
+                                       "filter": "withbody", "pagesize": per_query, "fromdate": since}, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            items = data.get("items") or []
+        except Exception:  # counted, never raised
+            last["so_failed"] += 1
+            continue
+        for q in items:
+            try:
+                owner, url, body = q.get("owner") or {}, q.get("link") or "", _text(q.get("body") or "")
+                author = _text(owner.get("display_name") or "")
+                if (not url or not author or not owner.get("user_id") or owner.get("user_type") == "does_not_exist"
+                        or len(body) < MIN_TEXT):
+                    continue
+                title = _text(q.get("title") or "")
+                covered = sum(k in f"{title} {body}".lower() for k in kws)
+                if covered < 2:
+                    continue
+                # Keyword coverage, not a meaning match, so it is capped at 0.5 like Hacker News.
+                match = round(0.5 * covered / len(kws), 2)
+                if url in best and best[url]["match"] >= match:
+                    continue
+                created = datetime.fromtimestamp(float(q["creation_date"]), timezone.utc).strftime("%Y-%m-%d")
+                best[url] = {"id": _vid(url), "repo": "stackoverflow.com", "url": url, "title": title,
+                             "body": body[:1500], "author": author, "created": created, "pain": pain, "match": match,
+                             "kind": "web", "profile": owner.get("link") or url, "login": f"so:{owner['user_id']}"}
+            except Exception:
+                continue
+        if data.get("backoff"):  # the API asked us to wait: no more calls this run
+            break
+    return sorted(best.values(), key=lambda v: -v["match"])

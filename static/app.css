@@ -343,6 +343,8 @@ a.r:hover, button.r:hover { background: rgba(255, 255, 255, 0.55); }
 .note .label { margin: 0 0 var(--space-2); }
 .note-text { margin: 0; font-size: 1.0625rem; line-height: 1.55; color: var(--color-ink); text-wrap: pretty; }
 .note-foot { margin: var(--space-3) 0 0; color: var(--color-muted); font-size: 0.875rem; }
+.note-act { margin-top: var(--space-4); }
+.hero > .wrap > .note-foot { margin: var(--space-4) auto 0; max-width: 46rem; }
 
 /* The confirm step: the offerings as ruled rows with a radio, in the page's own row pattern. */
 .btn .glyph { color: inherit; }

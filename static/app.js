@@ -12,6 +12,9 @@ const EMAIL = {valid: "verified", accept_all: "domain accepts all mail", invalid
 
 const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", error: "", detailKey: "", shown: "", open: {}, reading: null, confirm: null,
   head: "", ticked: new Set(), ledgerAll: false, entered: new Set(), moving: null, prof: 0, layout: "List"};
+// The customer profile of a product Overheard declined, shown without a run: kept for this tab so a reload does not lose it.
+function setProfile(p) { ui.profile = p; try { p ? sessionStorage.setItem("overheard.profile", JSON.stringify(p)) : sessionStorage.removeItem("overheard.profile"); } catch (e) { /* storage blocked */ } }
+try { ui.profile = JSON.parse(sessionStorage.getItem("overheard.profile") || "null"); } catch (e) { /* storage blocked */ }
 try { if (localStorage.getItem("earshot.layout") === "Board") ui.layout = "Board"; } catch (e) { /* storage blocked: list it is */ }
 
 async function api(path, body) {
@@ -151,7 +154,7 @@ function storyLine(d, example) {
   return `<section class="sec${enter(example ? "s-how" : "h-how")}" id="how"><div class="wrap">${secHead("How we got here", "Five <em>steps</em>")}<ul class="rows story">${rows}</ul></div></section>`;
 }
 
-function homeCustomer(d, example) {
+function homeCustomer(d, example, only) {
   const {icp, leads, status} = d, i = icp || {};
   const role = vals(i.personas)[0], kind = vals(i.industries)[0], trig = vals(i.triggers)[0];
   const sigs = leads.flatMap(l => l.signals.map(s => ({...s, login: l.login})));
@@ -163,19 +166,20 @@ function homeCustomer(d, example) {
   const sites = vals(i.channels).map(c => c.domain).filter(Boolean).slice(0, 4);
   const n = heardFrom(d);
   const line = [kind && !/\sat\s/i.test(role || "") ? `At ${kind.replace(/\s+compan(y|ies)$/i, "")} companies` : "", trig ? lowerFirst(trig) : ""].filter(Boolean).join(", ");
-  const banner = example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours.</span><button type="button" class="linkish" data-example-off>Use my website</button></p>` : "";
+  const banner = only ? `<p class="example-bar"><span>Profile only. People who buy this rarely describe the problem in public by name, so Overheard names the customer and where they talk, and stops there.</span><button type="button" class="linkish" data-restart>Try another website</button></p>`
+    : example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours.</span><button type="button" class="linkish" data-example-off>Use my website</button></p>` : "";
   const hero = `<header class="hero${enter(example ? "s-hero" : "h-hero")}"><div class="wrap">${banner}
     ${status.error ? stoppedNote(status) : ""}
     <p class="label">Your customer</p>
     <h1 class="display" id="home-line">${role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
     ${line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
-    ${example || status.running ? "" : proofLine(d)}
-    ${nextAction(d, example)}
+    ${example || only || status.running ? "" : proofLine(d)}
+    ${only ? "" : nextAction(d, example)}
     ${sites.length && n ? `<div class="logos"><p class="label bare">Heard from <span class="num">${n}</span> ${n === 1 ? "person" : "people"} on</p>
       <ul class="logo-row">${sites.map(s => `<li><a href="https://${esc(s)}" target="_blank" rel="noopener">${esc(s.replace(/^(www|news)\./, ""))}</a></li>`).join("")}</ul></div>` : ""}
   </div></header>`;
   if (!icp) return hero;
-  const painCards = pains.map(([p, k]) => `<li class="card"><div class="card-media"><p class="card-big num">${k || "–"}<small>${k === 1 ? "person" : k ? "people" : "not heard yet"}</small></p></div>
+  const painCards = pains.map(([p, k]) => `<li class="card">${only ? "" : `<div class="card-media"><p class="card-big num">${k || "–"}<small>${k === 1 ? "person" : k ? "people" : "not heard yet"}</small></p></div>`}
     <div class="card-body"><p class="card-title">${esc(headline(p))}</p><p class="card-line">${esc(p)}</p><p class="meta">${learned.has(p) ? "Learned from posts" : "From your site"}</p></div></li>`).join("");
   const words = [...sigs].filter(s => noTag(s.title)).sort((a, b) => (b.match || 0) - (a.match || 0)).slice(0, 6);
   const wordRows = words.map(s => `<li><a class="r" href="${safeUrl(s.url)}" target="_blank" rel="noopener"><span class="r-k">${esc(when(s.created))}</span>
@@ -184,18 +188,21 @@ function homeCustomer(d, example) {
   const personCard = l => { const inner = `<div class="card-media">${avatar(l, true)}</div><div class="card-body"><p class="card-title">${esc(whoOf(l))}${example ? "" : AR}</p>
       <p class="meta">${esc([l.company || (noAuthor(l) ? "Evidence only" : srcOf(l)), `Score ${l.score}`].join(" · "))}</p></div>`;
     return `<li>${example ? `<div class="card">${inner}</div>` : `<button type="button" class="card" data-open="${esc(l.login)}" data-go-leads>${inner}</button>`}</li>`; };
-  return hero + storyLine(d, example) +
+  const talk = only ? vals(i.channels).filter(c => c.domain).map(c => `<li><a class="r" href="https://${esc(c.domain)}" target="_blank" rel="noopener"><span class="r-k">${esc(cap(c.kind || ""))}</span>
+    <span class="r-t"><i>${esc(c.domain.replace(/^www\./, ""))}</i> ${esc(c.why || "")}</span><span class="r-n">${AR}</span></a></li>`).join("") : "";
+  return hero + (only ? "" : storyLine(d, example)) +
     (pains.length ? sec(example ? "s-pains" : "h-pains", secHead("What they struggle with", `${["One", "Two", "Three"][pains.length - 1]} <em>${pains.length === 1 ? "pain" : "pains"}</em>`) + `<ul class="cards">${painCards}</ul>`, "pains") : "") +
     (wordRows ? sec(example ? "s-words" : "h-words", secHead("In their own words", "What they <em>wrote</em>") + `<ul class="rows">${wordRows}</ul>`) : "") +
     (top.length ? sec(example ? "s-people" : "h-people", secHead("People", "Who <em>said it</em>") + `<ul class="cards">${top.map(personCard).join("")}</ul>` +
       (example ? "" : `<p class="center"><a class="pill" href="#leads">See all ${leads.length} <span aria-hidden="true">⌄</span></a></p>`)) : "") +
-    (example ? "" : fullProfile(i, d.expansions || {}));
+    (talk ? sec("h-talk", secHead("Where to listen", "Where they <em>talk</em>") + `<ul class="rows">${talk}</ul>`, "talk") : "") +
+    (example ? "" : fullProfile(i, d.expansions || {}, only));
 }
 // Everything else the Planner inferred, closed by default: one row per question, opened in place.
-function fullProfile(i, said) {
+function fullProfile(i, said, only) {
   const list = xs => `<ul class="st-lines">${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
   const exp = (i.expansion || []).filter(x => x.segment).map(x => { const a = said[x.segment], seg = esc(x.segment);
-    const pills = ["accept", "dismiss"].filter(k => k !== a).map(k => `<button type="button" class="pill sm" data-expand="${k}" data-segment="${seg}">${a ? (k === "accept" ? "Add instead" : "Dismiss instead") : k === "accept" ? "Add" : "Dismiss"}</button>`).join("");
+    const pills = only ? "" : ["accept", "dismiss"].filter(k => k !== a).map(k => `<button type="button" class="pill sm" data-expand="${k}" data-segment="${seg}">${a ? (k === "accept" ? "Add instead" : "Dismiss instead") : k === "accept" ? "Add" : "Dismiss"}</button>`).join("");
     return `<li class="exp"><span><b>${seg}</b> ${esc(x.reasoning || "")}</span><span class="exp-act">${flashFor(x.segment) || (a ? `<span class="meta">${a === "accept" ? "Added" : "Dismissed"}</span>` : "")}${pills}</span></li>`; });
   const comp = (i.competitors || []).filter(c => c.name).map(c => `<li><b>${esc(c.name)}</b> <span class="meta">${esc(c.category || "")}</span><br>${esc(c.positioning || "")}${c.github_repo ? ` · ${ext("https://github.com/" + c.github_repo, c.github_repo + " ↗")}` : ""}</li>`);
   const rows = [
@@ -466,26 +473,46 @@ function countUp() {
 }
 // A run that stopped or was declined must not replace the answer the founder already has: say what happened,
 // in a block wide enough to read, and keep the earlier results underneath.
+const declinedSite = status => ((status.log || []).map(l => /reading\s+(\S+)/.exec(l)).find(Boolean) || [])[1] || "";
+const DECLINED = "Overheard could not find people to write to for this one. It can still tell you who your customer is.";
+// The one thing a declined run can still give: the customer, without the people. Shown only when the site is known.
+const profileAsk = site => !site ? "" : `<button type="button" class="btn" data-profile="${esc(site)}"${ui.profiling ? ` aria-busy="true" disabled` : ""}>${ui.profiling ? `${GLYPH}Working out who buys…` : "Show me the customer anyway"}</button>
+  ${ui.profileErr ? `<p class="error" role="alert">${esc(cap(ui.profileErr))}.</p>` : ""}`;
+async function showProfile(site) {
+  if (ui.profiling) return;
+  ui.profiling = true; ui.profileErr = ""; renderHome();
+  let focus = "";
+  try { focus = sessionStorage.getItem("overheard.focus." + hostOf(/^https?:/.test(site) ? site : "https://" + site)) || ""; } catch (e) { /* storage blocked */ }
+  try {
+    const r = await api("/api/profile", {target: site, ...(focus ? {focus} : {})});
+    if (r.icp) setProfile({site: r.site, icp: r.icp}); else ui.profileErr = r.reason || "could not work out who buys this";
+  } catch (e) { ui.profileErr = e.message.replace(/\.$/, ""); }
+  ui.profiling = false; renderHome();
+  if (ui.profile) scrollTo(0, 0);
+}
 function stoppedNote(status) {
   const err = String(status.error || "").replace(/^[A-Za-z]+Error:\s*/, ""), decline = /not a fit/i.test(err);
-  const site = ((status.log || []).map(l => /reading\s+(\S+)/.exec(l)).find(Boolean) || [])[1] || "";
+  const site = declinedSite(status);
   const host = site ? hostOf(/^https?:/.test(site) ? site : "https://" + site) || site : "";
   return `<aside class="note" role="status"><p class="label bare">${decline ? "Not a fit" : "Last search stopped"}${host ? ` · ${esc(host)}` : ""}</p>
     <p class="note-text">${esc(decline ? err.replace(/^(?:Overheard|Earshot) is not a fit for this product:\s*/i, "") : err)}</p>
-    <p class="note-foot">Your earlier results are below. <button type="button" class="linkish" data-restart>Try another website</button></p></aside>`;
+    <p class="note-foot">${decline ? DECLINED + " " : ""}Your earlier results are below. <button type="button" class="linkish" data-restart>Try another website</button></p>
+    ${decline && profileAsk(site) ? `<div class="note-act">${profileAsk(site)}</div>` : ""}</aside>`;
 }
 function failedView() {
   const err = String(ui.data.status.error || "").replace(/^[A-Za-z]+Error:\s*/, "");
-  const decline = /not a fit/i.test(err);
+  const decline = /not a fit/i.test(err), ask = decline ? profileAsk(declinedSite(ui.data.status)) : "";
   return `<header class="hero" role="alert"><div class="wrap"><p class="label">${decline ? "Not a fit" : "Stopped"}</p>
     <h1 class="display">${decline ? "Wrong tool for <em>this product</em>" : "The run <em>stopped</em>"}</h1>
     <p class="hero-desc">${esc(decline ? err.replace(/^(?:Overheard|Earshot) is not a fit for this product:\s*/i, "") : err)}</p>
-    <div class="hero-act"><button type="button" class="btn" data-restart>${decline ? "Try another website" : "Try again"}</button></div></div></header>`;
+    ${decline ? `<p class="note-foot">${DECLINED}</p>` : ""}
+    <div class="hero-act">${ask}<button type="button" class="${ask ? "pill" : "btn"}" data-restart>${decline ? "Try another website" : "Try again"}</button></div></div></header>`;
 }
 
 function homeMode() {
   const {leads, status} = ui.data;
   if (status.running) return "running";
+  if (ui.profile) return "profile";
   if (ui.confirm) return "confirm";
   if (ui.example) return "example";
   if (ui.restart) return "fresh";
@@ -497,12 +524,12 @@ function renderHome() {
   const mode = homeMode(), slot = $("home-top");
   document.body.classList.toggle("is-fresh", mode !== "home");
   document.body.dataset.mode = mode;
-  if (mode === "running") ui.confirm = null;  // a run started elsewhere: the question is moot
+  if (mode === "running") { ui.confirm = null; if (ui.profile) setProfile(null); }  // a run started elsewhere: the question is moot
   if (mode === "confirm") { if (!slot.querySelector("#confirm")) slot.innerHTML = confirmView(); }
   else if (mode === "fresh") {
     // Rebuild the form only when it is not being typed in.
     if (!slot.querySelector("#intake") || !(slot.contains(document.activeElement) || ui.reading)) slot.innerHTML = intakeForm();
-  } else slot.innerHTML = mode === "running" ? runView() : mode === "failed" ? failedView() : homeCustomer(mode === "example" ? SAMPLE : ui.data, mode === "example");
+  } else slot.innerHTML = mode === "running" ? runView() : mode === "failed" ? failedView() : mode === "profile" ? homeCustomer({icp: ui.profile.icp, leads: [], status: {log: []}}, false, true) : homeCustomer(mode === "example" ? SAMPLE : ui.data, mode === "example");
   $("home-strip").innerHTML = mode === "home" ? homeStrip() : "";
   $("home-strip").hidden = mode !== "home";
   reveal(); countUp();
@@ -828,7 +855,8 @@ document.addEventListener("click", async e => {
   if (e.target.closest("[data-not-quite]")) { ui.confirm.other = true; return showConfirm(); }
   if (e.target.closest("[data-example]")) return flip("example", true);
   if (e.target.closest("[data-example-off]")) { flip("example", false); return $("target")?.focus(); }
-  if (e.target.closest("[data-restart]")) { ui.target = ""; flip("restart", true); return $("target")?.focus(); }
+  if (e.target.closest("[data-profile]")) return showProfile(e.target.closest("[data-profile]").dataset.profile);
+  if (e.target.closest("[data-restart]")) { ui.target = ""; setProfile(null); flip("restart", true); return $("target")?.focus(); }
   if (e.target.closest("[data-restart-off]")) return flip("restart", false);
   if (e.target.closest("[data-trail-all]")) { ui.trailAll = true; renderHome(); return; }
   if (e.target.closest("[data-ledger-all]")) { ui.ledgerAll = true; renderPanel(); return; }

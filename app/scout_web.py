@@ -140,7 +140,7 @@ def _tavily_search(per_query: int):
 last = {"queries": 0, "failed": 0}  # the most recent sweep, so the caller can say when searches failed
 
 
-def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None, hn=None, reddit=None,
+def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None, hn=None, reddit=None, more=None,
                 per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None) -> list[dict]:
     """Tavily results, plus Hacker News records with an author and a date, plus Reddit authors from the post JSON.
 
@@ -149,6 +149,7 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
     sources.last.update(hn_requests=0, hn_failed=0, reddit_ok=0, reddit_blocked=False)
     if search is None:
         hn, reddit = hn or sources.hn_voices, reddit or sources.reddit_post
+        more = [sources.so_voices] if more is None else more
         search = _tavily_search(per_query) if os.environ.get("TAVILY_API_KEY") else None
     domains = clean_domains(domains) or _domains()  # the Planner's channels, else every known source
     best: dict[str, dict] = {}
@@ -182,6 +183,12 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
     if hn and "news.ycombinator.com" in domains:
         for v in hn(pains):  # the structured record wins over a Tavily result for the same item
             best[v["url"]] = v
+    for source in more or []:  # other sources that publish the author and date; one failing never affects another
+        try:
+            for v in source(pains):
+                best[v["url"]] = v
+        except Exception:
+            continue
     return sorted(best.values(), key=lambda v: -v["match"])
 
 
@@ -218,6 +225,8 @@ def as_people(voices: list[dict]) -> list[tuple[str, list[dict]]]:
         slot = "u/" if v["repo"].endswith("reddit.com") else ""
         if not v.get("author"):
             key = v["id"]
+        elif v.get("login"):
+            key = v["login"]  # the source gave a stable id ("so:<user id>"): named, so no no-author hold
         elif v["repo"] == "news.ycombinator.com":
             key = "hn:" + v["author"]  # named, so app.policy's no-author hold (login "web:…") does not apply
         else:
