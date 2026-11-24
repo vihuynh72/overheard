@@ -98,6 +98,15 @@ h3 { font: 600 var(--text-base)/1.4 var(--font-body); }
 .lead { font-size: var(--text-lg); line-height: 1.55; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); margin-top: var(--space-8); }
 .fine { margin-top: var(--space-4); font-size: var(--text-sm); color: var(--color-muted); }
+/* A one-line pulse from the real workbench: the agents are working whether or not you are watching. */
+.live { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-rule); font: 400 var(--text-sm)/1.5 var(--font-mono); color: var(--color-muted); }
+.live[hidden] { display: none; }
+.live-dot { align-self: center; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--color-good); }
+.live-label { color: var(--color-ink); }
+.live-text { min-width: 0; transition: opacity 0.4s ease; }
+.live-text.is-out { opacity: 0; }
+@keyframes live-pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 
 /* 2. Specimen: narrow intro, evidence laid out as a labelled record */
 .specimen-intro { grid-column: 1 / 5; }

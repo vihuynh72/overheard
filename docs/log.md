@@ -42,3 +42,8 @@ Format: `YYYY-MM-DD · <what was decided or changed> · <why>`
 2026-11-24 · Flexprice wallet now draws down through a priced plan and subscription (scripts/flexprice_setup.py); pending charges cover the 0.2–15 s delay measured · the balance did not move without a subscribed plan
 2026-11-24 · Approved and released messages are sent through Resend to a demo inbox, never to the lead (app/mailer.py) · a real send path without emailing strangers
 2026-11-24 · A rejection reason becomes a standing rule when it matches a known pattern · Lauren Tan: every correction should become a deterministic check
+2026-11-24 · Voice button removed; one docked question card (static/ask.js) is the only place the founder acts · the voice control asked for labour, which breaks principle 2
+2026-11-24 · Planner now chooses where to listen (channels, process_areas) and the Scout learns up to three pains from the best real posts, one round · fixed site list and pre-written pains were the limit on relevance; X test showed vendors outnumber buyers, so sellers' posts are dropped
+2026-11-24 · Agreement gate judges only calls that could do harm (agreed vs wrong releases); held-but-approved is reported, not penalised · QA showed autopilot was unreachable because caution counted as error
+2026-11-24 · A credit for outreach is recorded only when mail left; graph.query recorded per lead · billing must match what happened
+2026-11-24 · App being reduced to one home screen with sections behind an icon rail, Pipeline tab removed; MCP server at /mcp exposes read tools plus find_leads, never decisions · user found the UI cluttered and asked for agent access

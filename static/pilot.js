@@ -5,20 +5,27 @@
   "use strict";
 
   // Controls that spend money or carry a decision that belongs to the human or to the gated Sender.
-  var DENY = "[data-act], [data-topup], form#intake button, [data-stage], .floor-trust .floor-control";
-  var DENY_WORDS = /^\s*(approve|reject|request|add|find)/i; // prefix, so "Requesting" and "Adding" are caught too
+  var DENY = "[data-act], [data-topup], form#intake button, form#intake-manual button, [data-stage], .floor-trust .floor-control, .ask";
+  var DENY_WORDS = /^\s*(approve|reject|request|add|find|send|(yes|no|later)\b)/i; // prefix, so "Requesting" and "Adding" are caught too
   var STORE_KEY = "earshot.pilot";
   var IDLE_RESUME_MS = 8000;
   var PATROL_AFTER_MS = 9000;
   var WAIT_MS = 4000;
   var QUEUE_CAP = 12;
-  var PATROL = ["floor", "leads", "map"];
+  var HOLD_MS = 90000; // a view the human chose is theirs for this long after their last input
+  var FLOOR_LOOKS = [
+    ["#mount-habitat", "Watching the agents at their stations"],
+    [".home-line", "Rereading who the customer is"],
+    [".said", "Checking the people who said it"],
+    [".home-strip", "Checking the gates and credits"]
+  ];
+  var AWAY = ["leads", "map"];
   var PATROL_SAY = {
     floor: "Checking on the line of agents",
     leads: "Looking over the leads again",
     map: "Checking who shares which pain",
     profile: "Rereading the customer profile",
-    pipeline: "Glancing at where each lead stands",
+    proof: "Checking why the line can be trusted",
     activity: "Reading back what the agents did"
   };
   var ABORT = { abort: true };
@@ -28,6 +35,7 @@
   var pos = { x: 0, y: 0 }, vel = 0, flip = 1, travelling = false;
   var marked = null, markHold = false, captionOn = false;
   var idleSince = 0, selfUntil = 0, graceUntil = 0, moved = 0, resumeTimer = 0;
+  var holdUntil = 0, selfNavUntil = 0, patrols = 0;
   var root, cursor, caption, ripple, mark, live, dock, toggle, takeover;
   var T = { min: 520, max: 1500, dwell: 1600, press: 150 };
 
@@ -49,7 +57,7 @@
     return isFinite(v) ? v : fallback;
   }
   function store(v) { try { localStorage.setItem(STORE_KEY, v ? "on" : "off"); } catch (e) { /* private mode: state lasts this page only */ } }
-  function stored() { try { return localStorage.getItem(STORE_KEY) !== "off"; } catch (e) { return true; } }
+  function stored() { try { return localStorage.getItem(STORE_KEY) === "on"; } catch (e) { return false; } /* off until asked for: it must not cover the customer on home */ }
 
   function isDenied(el) {
     if (!el || !el.closest) return true;
@@ -61,6 +69,7 @@
   // The only place the pilot presses anything. The denylist is checked here, at the moment of the click.
   function activate(el) {
     if (!el.isConnected || isDenied(el) || el.disabled) return false;
+    selfNavUntil = now() + 1500; // a hash change right after this click is the pilot's, not the human's
     if (typeof el.click === "function") el.click();
     else el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     return true;
@@ -297,7 +306,7 @@
   /* --- deciding what to do next from successive states --- */
 
   function tab(view, text) {
-    return { target: "nav.tabs a[data-view='" + view + "']", act: "click", say: text, dwell: 700 };
+    return { target: "nav.tabs [data-view='" + view + "']", act: "click", say: text, dwell: 700 };
   }
   function top(leads) {
     return (leads || []).reduce(function (best, l) { return !best || Number(l.score) > Number(best.score) ? l : best; }, null);
@@ -307,7 +316,7 @@
   function handoffStep(hs) {
     var last = hs && hs[hs.length - 1];
     var text = last ? cap(last.from) + " just handed a lead to " + cap(last.to) : "Watching the line work";
-    return { target: function () { return document.querySelector(".floor-log li") || document.querySelector(".floor-headline"); }, act: "look", say: text, dwell: 1800 };
+    return { target: function () { return document.querySelector("#mount-habitat"); }, act: "look", say: text, dwell: 1800 };
   }
 
   function openLeadSteps(data) {
@@ -328,30 +337,51 @@
   function inboxSteps(inbox) {
     var it = inbox[0], name = it.name || it.login;
     return [
-      tab("floor", inbox.length === 1 ? "One lead is waiting on you. Going to the Floor" : inbox.length + " leads are waiting on you. Going to the Floor"),
-      { target: ".floor-inbox", act: "look", say: "These are held for your judgment, with the reason for each", dwell: 1600 },
-      { target: ".floor-inbox-btn", act: "click", say: "Opening " + name + " so you can see why it was held" },
+      tab("leads", inbox.length === 1 ? "One lead is waiting on you. Going to People" : inbox.length + " leads are waiting on you. Going to People"),
+      { target: rowFor(it.login), act: "click", say: "Opening " + name + " so you can see why it was held" },
       { target: "#detail .signal", act: "look", say: "Here is what " + name + " wrote. The decision stays with you", dwell: 2200 }
     ];
   }
 
   function trustSteps(level) {
     return [
-      tab("floor", "Autonomy changed. Going to the trust ladder"),
-      { target: ".floor-trust .floor-level", act: "look", say: "The line now runs at " + level, dwell: 1600 },
-      { target: ".floor-trust .floor-control button", act: "hover", say: "Raising autonomy is your decision, so I only point at it", dwell: 2000 }
+      tab("proof", "Autonomy changed. Going to Proof"),
+      { target: ".floor-trust", act: "look", say: "The line now runs at " + level, dwell: 2000 }
     ];
   }
 
+  function current() { var v = location.hash.slice(1); return v && PATROL_SAY[v] ? v : "floor"; }
+  function held() { return now() < holdUntil; }
+
+  // Idle patrol lives on the Floor, where the agents are; every fourth round it glances at another view and comes back.
   function patrolSteps() {
-    var cur = document.querySelector("nav.tabs a[aria-current='page']");
-    var at = PATROL.indexOf(cur ? cur.getAttribute("data-view") : "");
-    var v = PATROL[(at + 1) % PATROL.length];
-    return [tab(v, PATROL_SAY[v]), { target: ".view-head h1", act: "look", say: PATROL_SAY[v], dwell: 2400 }];
+    patrols++;
+    var v = current();
+    if (v !== "floor") {
+      if (held()) return [];
+      return [tab("floor", PATROL_SAY.floor)];
+    }
+    if (!held() && patrols % 4 === 0) {
+      var away = AWAY[(patrols / 4) % AWAY.length];
+      return [tab(away, PATROL_SAY[away]), { target: ".view-head h1", act: "look", say: PATROL_SAY[away], dwell: 2400 }];
+    }
+    var look = FLOOR_LOOKS[patrols % FLOOR_LOOKS.length];
+    return [{ target: look[0], act: "look", say: look[1], dwell: 2600 }];
   }
 
-  function replace(steps) { gen++; running = false; marked = null; queue = steps.slice(0, QUEUE_CAP); }
-  function push(steps) { queue = queue.concat(steps).slice(0, QUEUE_CAP); }
+  // While the human holds a view, drop everything from the first step that would leave it.
+  function trim(steps) {
+    if (!held()) return steps;
+    var here = current(), out = [];
+    for (var i = 0; i < steps.length; i++) {
+      var m = typeof steps[i].target === "string" && steps[i].target.match(/data-view='([a-z]+)'/);
+      if ((m && m[1] !== here) || steps[i].leaves) break;
+      out.push(steps[i]);
+    }
+    return out;
+  }
+  function replace(steps) { gen++; running = false; marked = null; queue = trim(steps).slice(0, QUEUE_CAP); }
+  function push(steps) { queue = queue.concat(trim(steps)).slice(0, QUEUE_CAP); }
 
   function plan(data) {
     var was = seen || { status: {}, leads: [], floor: {} };
@@ -363,7 +393,7 @@
 
     if (st.error && st.error !== (was.status || {}).error) {
       replace([tab("floor", "The run stopped. Going to see where"),
-        { target: function () { return document.querySelector(".floor-stopped") || document.querySelector(".floor-headline"); }, act: "look", say: "This is where the line stopped", dwell: 2400 }]);
+        { target: function () { return document.querySelector(".home-line"); }, act: "look", say: "This is where the line stopped", dwell: 2400 }]);
       return;
     }
     if (st.running && !(was.status || {}).running) {
@@ -404,6 +434,7 @@
 
   function human(e) {
     if (!e.isTrusted || !enabled || !built) return;
+    if (held()) holdUntil = now() + HOLD_MS;
     if (e.type === "scroll" && now() < selfUntil) return;
     if (e.type === "pointermove") {
       if (now() < graceUntil) return;
@@ -412,6 +443,15 @@
     pause();
   }
 
+  // A view the human navigated to (tab, link, voice, back button) is a takeover: stop, and stay there.
+  function holdView() {
+    holdUntil = now() + HOLD_MS;
+    gen++; queue = []; running = false; marked = null; captionOn = false; idleSince = now();
+    if (built && enabled) live.textContent = "Staying on " + cap(current()) + ", the view you chose.";
+  }
+  addEventListener("hashchange", function () { if (now() >= selfNavUntil) holdView(); });
+  if (location.hash.length > 1) holdUntil = now() + HOLD_MS; // a deep link is a choice too
+
   ["pointermove", "pointerdown", "keydown", "touchstart", "wheel", "scroll"].forEach(function (type) {
     addEventListener(type, human, { capture: true, passive: true });
   });
@@ -419,6 +459,7 @@
   setInterval(function () {
     if (!enabled || paused || running || document.hidden || !latest || !built) return;
     if (now() - idleSince < PATROL_AFTER_MS) return;
+    idleSince = now();
     queue = patrolSteps();
     kick();
   }, 1000);

@@ -140,4 +140,56 @@ def test_default_search_uses_tavily_client_at_call_time(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "sekrit-tavily")
     [v] = w.find_voices(["p"], per_query=3)
     assert seen["key"] == "sekrit-tavily" and seen["kw"]["max_results"] == 3 and seen["kw"]["search_depth"] == "basic"
+    assert seen["kw"]["time_range"] == "year"
     assert "dev.to" in seen["kw"]["include_domains"] and "sekrit-tavily" not in str(v)
+
+
+def test_clean_domains_strips_scheme_www_path_and_lowercases():
+    got = w.clean_domains(["HTTPS://www.News.YCombinator.com/item?id=1", "reddit.com/r/saas", "  g2.com  "])
+    assert got == ["news.ycombinator.com", "reddit.com", "g2.com"]
+
+
+def test_clean_domains_drops_login_vendor_and_non_hostnames():
+    got = w.clean_domains(["linkedin.com", "uk.linkedin.com", "stripe.com", "billing.stripe.com", "localhost",
+                           "192.168.0.1", "intranet.local", "not a host", "host:8080", "", "dev.to", "dev.to"])
+    assert got == ["dev.to"]
+
+
+def test_clean_domains_caps_at_eight_and_empty_is_empty():
+    assert len(w.clean_domains([f"site{i}.com" for i in range(12)])) == 8
+    assert w.clean_domains(None) == [] and w.clean_domains([]) == []
+
+
+def test_find_voices_searches_only_given_domains_and_falls_back():
+    s = fake([hit("https://news.ycombinator.com/item?id=1")])
+    w.find_voices(["p"], search=s, domains=["https://www.news.ycombinator.com/", "linkedin.com"])
+    assert s.calls[0][1] == ["news.ycombinator.com"]
+    for empty in (None, [], ["linkedin.com"]):
+        s = fake([hit("https://dev.to/a")])
+        w.find_voices(["p"], search=s, domains=empty)
+        assert s.calls[0][1] == w._domains()
+
+
+def test_vendor_path_rule_uses_the_chosen_domains():
+    s = fake([hit("https://forum.example-shop.com/features/x"), hit("https://acme.io/features/y")])
+    urls = {v["url"] for v in w.find_voices(["p"], search=s, domains=["forum.example-shop.com"])}
+    assert urls == {"https://forum.example-shop.com/features/x"}
+
+
+def _voice(url, author=""):
+    return {"url": url, "author": author, "repo": w._host(url)}
+
+
+def test_drop_sellers_by_handle_and_x_account_segment():
+    voices = [_voice("https://reddit.com/r/x/1", "Acme_Support"), _voice("https://x.com/rival_co/status/1"),
+              _voice("https://twitter.com/Acme/status/2"), _voice("https://x.com/buyer/status/3", "buyer"),
+              _voice("https://news.ycombinator.com/item?id=1")]
+    kept = w.drop_sellers(voices, ["Acme", "Rival Co"])
+    assert [v["url"] for v in kept] == ["https://x.com/buyer/status/3", "https://news.ycombinator.com/item?id=1"]
+
+
+def test_drop_sellers_ignores_names_under_four_characters_and_other_hosts_paths():
+    voices = [_voice("https://reddit.com/r/x/1", "bobby"), _voice("https://x.com/acme/status/1"),
+              _voice("https://g2.com/acme/reviews")]
+    assert w.drop_sellers(voices, ["bob", "", "A c"]) == voices  # "bob" and "ac" are too short to match on
+    assert [v["url"] for v in w.drop_sellers(voices, ["acme"])] == ["https://reddit.com/r/x/1", "https://g2.com/acme/reviews"]

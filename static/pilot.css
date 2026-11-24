@@ -65,7 +65,7 @@
   will-change: transform;
 }
 .pilot-caption.is-on { opacity: 1; }
-.pilot-root.is-paused .pilot-caption { opacity: 0.4; }
+.pilot-root.is-paused .pilot-caption, .pilot-root.is-paused .pilot-mark { opacity: 0; } /* the human is working: get out of their way */
 
 /* Outline on what it is looking at; dashed when the control belongs to the human */
 .pilot-mark {

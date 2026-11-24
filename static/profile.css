@@ -85,7 +85,7 @@
 .eprof-pain-count { font: 500 var(--text-sm)/1 var(--font-mono); color: var(--color-ink); white-space: nowrap; }
 .eprof-pain.is-quiet .eprof-pain-count { color: var(--color-muted); }
 .eprof-pain-line { display: block; width: 100%; height: var(--space-12); overflow: visible; }
-.eprof-names { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3) var(--space-6); padding-left: calc(2ch + var(--space-4)); }
+.eprof-names { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: var(--space-3) var(--space-6); padding-left: calc(2ch + var(--space-4)); }
 .eprof-name { position: relative; padding-top: var(--space-3); font-size: var(--text-sm); font-weight: 500; }
 .eprof-name::before { content: ""; position: absolute; top: calc(-1 * var(--space-3)); left: 0; height: calc(var(--space-3) * 1.6); border-left: 1px solid var(--color-control); }
 .eprof-name-co { display: block; font: 400 var(--text-xs)/1.4 var(--font-mono); color: var(--color-muted); }

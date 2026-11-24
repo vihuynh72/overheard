@@ -436,7 +436,7 @@
         return;
       }
       if (!c) { label(ctx, inst, p.x, p.y + 48, p.label); return; }
-      var sub = short(c.name, 16) + (c.count != null ? " · " + c.count : "");
+      var sub = short(c.name, 16) + (c.count ? " · " + c.count : ""); // a zero count after a restart says nothing
       label(ctx, inst, p.x, p.y + 48, p.label, (c.state === "blocked" ? "stopped · " : "") + sub,
         c.state === "blocked" ? col.danger : c.state === "working" ? col.ink : col.muted);
       if (c.state === "done") {
@@ -514,9 +514,28 @@
     inst.act = act;
   }
 
+  // Between runs there are no live handoffs. Rather than stand still, the line replays how each waiting
+  // lead reached the human, one lead at a time, and the caption says plainly that it is a replay.
+  var REPLAY = [
+    ["scout", "qualifier", "brings in what {n} wrote, in their own words"],
+    ["qualifier", "enricher", "weighs the fit and passes {n} on"],
+    ["enricher", "writer", "looks up how to reach {n}"],
+    ["writer", "reviewer", "drafts a note to {n}"],
+    ["reviewer", "inbox", "holds {n}'s draft for your decision"]
+  ];
+  function replay(inst) {
+    if (inst.lastTs !== -Infinity || !inst.inbox.length || inst.t < inst.replayAt) return;
+    var it = inst.inbox[inst.replayN++ % inst.inbox.length], n = short(it.name || it.login, 28);
+    inst.queue = REPLAY.map(function (r) {
+      var who = inst.creatures.get(r[0]);
+      return { from: r[0], to: r[1], replay: true, text: (who ? who.name : r[0]) + " " + r[2].replace("{n}", n) };
+    });
+    inst.replayAt = inst.t + 3.5 + REPLAY.length * 2.2;
+  }
+
   function advance(inst) {
     var a = inst.act;
-    if (!a) { if (inst.queue.length) start(inst, inst.queue.shift()); return; }
+    if (!a) { if (!inst.queue.length) replay(inst); if (inst.queue.length) start(inst, inst.queue.shift()); return; }
     if (a.phase === "carry") {
       var hd = head(a.carrier), d = a.dest();
       a.token = { x: hd.x, y: hd.y + Math.sin(inst.t * 6) * 1.5 };
@@ -533,7 +552,7 @@
 
   function showCaption(inst, h) {
     var nameOf = function (k) { var c = inst.creatures.get(k); return c ? c.name : k === "inbox" ? "Needs you" : String(k || ""); };
-    inst.capWhen.textContent = clock(h.ts);
+    inst.capWhen.textContent = h.replay ? "Replay" : clock(h.ts);
     inst.capWho.textContent = short(nameOf(h.from), 24) + " to " + short(nameOf(h.to), 24);
     inst.capWhat.textContent = String(h.text || "");
   }
@@ -559,7 +578,7 @@
       wrap: wrap, canvas: canvas, ctx: canvas.getContext("2d"), tip: tip, tipName: tipName, tipState: tipState, tipDid: tipDid, tipCount: tipCount,
       capWhen: capWhen, capWho: capWho, capWhat: capWhat, list: list, buttons: new Map(),
       creatures: new Map(), queue: [], act: null, seen: new Set(), lastTs: -Infinity, primed: false,
-      trust: { level: "", gates: [] }, inbox: [], gateO: 0, flow: 0,
+      trust: { level: "", gates: [] }, inbox: [], gateO: 0, flow: 0, replayAt: 2, replayN: 0,
       t: 0, last: 0, raf: 0, visible: true, still: reduceQuery.matches, s: 1, dpr: 1, cssW: 0,
       hover: null, focus: null, tipKey: ""
     };
@@ -663,7 +682,7 @@
       inst.tipState.textContent = c.state === "blocked" ? "stopped" : c.state;
       inst.tipState.dataset.state = c.state;
       inst.tipDid.textContent = c.did || "Nothing yet.";
-      inst.tipCount.textContent = c.count != null ? "count " + c.count : "";
+      inst.tipCount.textContent = c.count ? "count " + c.count : "";
     }
     var x = clamp(c.x * inst.s, 132, Math.max(132, inst.cssW - 132)), y = (c.y - c.R * c.squash - 22) * inst.s;
     var below = y < 110;
@@ -709,6 +728,7 @@
     if (!inst.primed || inst.still) { // history is not replayed; only what happens from now on is acted out
       inst.primed = true;
       if (hs.length) showCaption(inst, hs[hs.length - 1]);
+      else if (inst.inbox.length) inst.capWhat.textContent = "Resting between runs. Replaying how the " + inst.inbox.length + " waiting leads reached you.";
     } else {
       inst.queue = inst.queue.concat(fresh).slice(-4); // keep up when many arrive at once
     }

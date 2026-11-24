@@ -13,6 +13,28 @@
 - **Run.** `uv venv --python 3.12 && uv pip install -r requirements.txt`, then `.venv/bin/uvicorn app.main:app --port 8765` with the variables from `.env.example` set.
 - **Earlier research.** `/Users/vihuynh/Desktop/claude/docs/brainstorming/` (start with `INDEX.md` and `TOP-10.md`). The spec is at `/Users/vihuynh/Downloads/AI GTM Engine - Product & Technical Requirements Specification.md`.
 
+## First principles of this product
+
+Outbound fails for one reason: the sender does not know whether this person has this problem now. Everything else (lists, enrichment, sequences) is machinery around that missing fact. So the product is a machine for establishing that fact and acting on it, and every piece of work is judged against these five statements.
+
+1. **Evidence before action.** A lead exists only because a person said something in public that shows the problem. No evidence link, no lead. No claim in a message without evidence behind it.
+2. **The human gives a goal, not labour.** The founder supplies one input (their site) and then only answers questions the machine cannot settle. Any new field, button or setting the founder must operate is a defect unless the machine truly cannot infer it.
+3. **Autonomy is earned and revocable.** The machine may act alone only where its past judgments matched the human's, its own checks are clean, and the simulation holds. One release the human would have stopped ends autopilot.
+4. **Every mistake becomes a mechanism.** A correction is not finished until it lives in code: a check, a rule, a gate or a test. A line of prompt is the weakest fix and the last resort.
+5. **Declining is a feature.** When the method cannot work for a product, or a lead is weak, the machine says so and stops. Volume is never the goal; relevant people are.
+
+**How these are enforced, strongest first.** When you add or change behaviour, put the rule at the highest layer that can hold it, and add the test in the same change.
+
+| Layer | What lives here | Where |
+|---|---|---|
+| Impossible by construction | No message is ever addressed to a lead in this build; the AI cursor cannot press anything that spends money or decides for the human; the Sender releases nothing unless policy, review and the credit gate all pass | `app/mailer.py`, `static/pilot.js` denylist, `app/autopilot.py` `run_sender` |
+| Checked on every run | The twelve lead rules, the second-model claim check, the fit check at intake, the score floor | `app/checks.py`, `app/reviewer.py`, `app/pipeline.py` |
+| Checked across runs | Ten product types simulated; failure patterns written to the lessons ledger; a fixed lesson that recurs is flagged | `app/simulate.py`, `app/lessons.py` |
+| Earned | Trust gates decide the autonomy level | `app/trust.py` |
+| Advised | Prompts and this file | last resort |
+
+A worker's brief must name which of the five statements the work serves and which layer its rule belongs to. Work that serves none of them is not done.
+
 ## Three lenses
 
 Hold these on every piece of work. They are questions to answer, not sections to write.

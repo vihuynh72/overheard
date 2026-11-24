@@ -12,9 +12,13 @@ def agreement(decisions: list[dict], window: int = 20) -> dict:
     # release pairs with approve, hold/drop pairs with reject
     agree = sum((d["agent"] == "release") == (d["human"] == "approve") for d in recent)
     n = len(recent)
+    false_release = sum(d["agent"] == "release" and d["human"] == "reject" for d in recent)
+    # Holding something the human would have approved is caution, not error: it costs a question, not a mistake.
+    # So the rate is judged only on calls that could do harm: agreed calls against wrong releases.
+    judged = agree + false_release
     return {
-        "n": n, "agree": agree, "rate": round(agree / n, 2) if n else 0.0,
-        "false_release": sum(d["agent"] == "release" and d["human"] == "reject" for d in recent),
+        "n": n, "agree": agree, "rate": round(agree / judged, 2) if judged else 0.0,
+        "false_release": false_release,
         "false_hold": sum(d["agent"] != "release" and d["human"] == "approve" for d in recent),
     }
 
@@ -30,7 +34,8 @@ def _relevant_pct(simulation: dict | None) -> float | None:
 def gates(decisions: list[dict], findings: list[dict], simulation: dict | None, lessons: list[dict],
           *, min_decisions: int = 8, min_rate: float = 0.9, min_relevant_pct: int = 60) -> list[dict]:
     a = agreement(decisions)
-    enough = a["n"] >= min_decisions
+    judged = a["agree"] + a["false_release"]  # cautious holds earn no trust, so they do not count toward the minimum
+    enough = judged >= min_decisions
     pct = _relevant_pct(simulation)
     came_back = sum(l.get("status") == "open" and bool(l.get("regressed")) for l in lessons)
     return [
@@ -38,8 +43,8 @@ def gates(decisions: list[dict], findings: list[dict], simulation: dict | None, 
          "value": _count(len(findings), "problem", "problems"), "target": "0 problems",
          "passed": not findings},
         {"key": "agreement", "label": "Agent matches your decisions", "layer": "checked",
-         "value": (f"{a['agree']} of {a['n']} matched your decision" if enough
-                   else f"{a['n']} of {min_decisions} decisions needed"),
+         "value": (f"{a['agree']} matched, {a['false_release']} wrong releases, {a['false_hold']} held that you approved" if enough
+                   else f"{judged} of {min_decisions} decisions needed"),
          "target": f"{round(min_rate * 100)}% of at least {min_decisions}",
          "passed": enough and a["rate"] >= min_rate},
         {"key": "false_release", "label": "No release you would have stopped", "layer": "enforced",

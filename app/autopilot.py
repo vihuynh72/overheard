@@ -104,9 +104,10 @@ def run_sender(st: dict | None = None) -> int:
             held += 1
             continue
         store.upsert("Person", "login", dict(login=lead["login"], draft_status="approved", stage="Contacted", stage_actor="agent"))
-        billing.record("outreach.sent", lead["login"], tier=lead["tier"])
-        sent = mailer.describe(mailer.send(lead, lead["subject"], lead["body"]))
-        store.log(lead["login"], "agent", "released", f"inside policy, passed review; {sent}")
+        result = mailer.send(lead, lead["subject"], lead["body"])
+        if result["status"] == "sent":  # a credit is only spent on mail that actually left
+            billing.record("outreach.sent", lead["login"], tier=lead["tier"])
+        store.log(lead["login"], "agent", "released", f"inside policy, passed review; {mailer.describe(result)}")
         released += 1
     if released or held:
         pipeline.say(f"Sender: released {released} messages inside your policy; {held} held for you")

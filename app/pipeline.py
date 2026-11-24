@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from typing import Literal
 
 import anthropic
 import httpx
@@ -65,6 +66,16 @@ class Competitor(BaseModel):
     github_repo: str  # "owner/name" of its public issue tracker, or "" if closed source
 
 
+class Channel(BaseModel):
+    domain: str  # a bare public host such as "news.ycombinator.com"
+    kind: Literal["forum", "community", "reviews", "social", "tracker"]
+    why: str  # one sentence: why this buyer writes there
+
+
+class Learned(BaseModel):
+    pains: list[str]
+
+
 class ICP(BaseModel):
     product: str
     industries: Scored
@@ -77,6 +88,8 @@ class ICP(BaseModel):
     competitors: list[Competitor]
     tracker_fit: bool
     tracker_fit_reason: str
+    channels: list[Channel]
+    process_areas: list[str]
 
 
 ICP_SYSTEM = """You define the ideal customer profile for a B2B product from its description.
@@ -90,7 +103,21 @@ you know its exact owner/name; otherwise leave it empty.
 technical founders AND open-source projects in this space have public issue trackers where those
 buyers describe their problems. It is false for consumer apps, local services, products bought by
 non-technical staff, and descriptions too vague to name a buyer. `tracker_fit_reason` is one plain
-sentence a founder would understand."""
+sentence a founder would understand.
+`channels` are the four to six public places where THIS buyer describes THIS kind of problem in
+their own words, chosen for the buyer and not for software in general: engineers write in issue
+trackers, Hacker News and the relevant subreddits; finance or operations staff in accounting and
+operations communities and on review sites; shop owners in seller forums; consumers in the consumer
+communities for that category. `domain` is a real, well-known bare host (for example
+"news.ycombinator.com"), never a vendor's own site, never LinkedIn or any site that needs a login to
+read. `kind` is forum, community, reviews, social or tracker. `why` is one sentence on why this
+buyer writes there. `process_areas` are three to five short names of the jobs this product touches,
+in the buyer's own words."""
+
+LEARN_SYSTEM = """You are given pain statements already being searched for, and the real posts that matched them best.
+Write up to three additional pain statements in the wording these real people used: their terms,
+their level of detail, never marketing words. Each must differ in substance from every existing
+statement, not paraphrase it. One plain sentence each. Return an empty list if the posts add nothing new."""
 
 
 class Qualification(BaseModel):
@@ -153,8 +180,13 @@ def fetch_issues(repo: str, pages: int = 3) -> list[dict]:
 
 # --- Moss ------------------------------------------------------------------
 
-async def match_pains(issues: list[dict], pains: list[str], index: str = INDEX) -> dict[str, tuple[str, float]]:
-    """Returns {issue id: (best matching pain, score)} for hits above MIN_MATCH."""
+async def match_pains(issues: list[dict], pains: list[str], index: str = INDEX,
+                      refine=None) -> dict[str, tuple[str, float]]:
+    """Returns {issue id: (best matching pain, score)} for hits above MIN_MATCH.
+
+    `refine(best_so_far, issues_by_id) -> list[str]` runs once between two query rounds on the same index:
+    the statements it returns are queried too and the best score per issue wins. If it fails, round one stands.
+    """
     moss = MossClient(os.environ["MOSS_PROJECT_ID"], os.environ["MOSS_PROJECT_KEY"])
     if any(ix.name == index for ix in await moss.list_indexes()):
         await moss.delete_index(index)
@@ -162,15 +194,36 @@ async def match_pains(issues: list[dict], pains: list[str], index: str = INDEX) 
     try:
         await moss.load_index(index)
         best: dict[str, tuple[str, float]] = {}
-        for pain in pains:
-            res = await moss.query(index, pain, QueryOptions(top_k=20))
-            for d in res.docs:
-                if d.score >= MIN_MATCH and d.score > best.get(d.id, ("", 0))[1]:
-                    best[d.id] = (pain, d.score)
+
+        async def query(statements: list[str]) -> None:
+            for pain in statements:
+                res = await moss.query(index, pain, QueryOptions(top_k=20))
+                for d in res.docs:
+                    if d.score >= MIN_MATCH and d.score > best.get(d.id, ("", 0))[1]:
+                        best[d.id] = (pain, d.score)
+
+        await query(pains)
+        if refine:
+            try:
+                await query(list(refine(best, {i["id"]: i for i in issues}) or [])[:3])
+            except Exception:  # the extra round is a bonus: never fail a run because of it
+                pass
         return best
     finally:
         # The index is only needed for this run, and the free plan holds three: always give the slot back.
         await moss.delete_index(index)
+
+
+def learn_pains(pains: list[str], best: dict, issues_by_id: dict) -> list[str]:
+    """Up to three statements in the words the best-matching real posts used, each new against `pains`."""
+    top = sorted(best, key=lambda k: -best[k][1])[:8]
+    if not top:
+        return []
+    posts = "\n\n".join(f"{issues_by_id[k]['title']}\n{issues_by_id[k]['body'][:300]}" for k in top)
+    got = ask(Learned, LEARN_SYSTEM, "Statements already searched:\n" + "\n".join(f"- {p}" for p in pains)
+              + f"\n\nBest-matching real posts:\n{posts}").pains
+    seen = {p.strip().lower() for p in pains}
+    return [p.strip() for p in got if p.strip() and p.strip().lower() not in seen][:3]
 
 
 # --- Pipeline ----------------------------------------------------------------
@@ -187,7 +240,7 @@ def load_icp() -> dict | None:
 
 
 def build_leads(description: str, product_repo: str = "", *, say=say, contact: bool = True,
-                index: str = INDEX) -> tuple[dict, list[dict]]:
+                index: str = INDEX, sources: list[str] | None = None) -> tuple[dict, list[dict]]:
     """One full pass with no side effects on the graph: returns (icp, leads). Each lead carries its signals.
 
     `contact=False` skips paid email lookups and the credit gate, for simulations.
@@ -212,14 +265,30 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         found = fetch_issues(repo)
         say(f"Scout: {repo} has {len(found)} issues from outside users")
         issues += found
-    hits = asyncio.run(match_pains(issues, icp.pains, index)) if issues else {}
+    learned: list[str] = []
+
+    def refine(best, issues_by_id):  # the Planner wrote its statements before seeing one real post
+        learned.extend(learn_pains(icp.pains, best, issues_by_id))
+        return learned
+
+    hits = asyncio.run(match_pains(issues, icp.pains, index, refine)) if issues else {}
+    if learned:
+        say("Scout: learned how these people phrase it: " + "; ".join(learned))
     by_author: dict[str, list[dict]] = {}
     for i in issues:
         if i["id"] in hits:
             i["pain"], i["match"] = hits[i["id"]]
             by_author.setdefault(i["author"], []).append(i)
     # A third of the cap is kept for web voices, so the GitHub authors cannot crowd them out.
-    voices = scout_web.find_voices(icp.pains, scout_web.PROCESS_AREAS)
+    domains = scout_web.clean_domains([c.domain for c in icp.channels])
+    if domains:
+        say("Planner → Scout: listening on " + (", ".join(domains[:-1]) + " and " if len(domains) > 1 else "") + domains[-1])
+    voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains)
+    sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
+    kept = scout_web.drop_sellers(voices, sellers)
+    if len(kept) < len(voices):
+        say(f"Scout: dropped {len(voices) - len(kept)} posts written by the product's own company or its competitors")
+    voices = kept
     web = scout_web.as_people(voices)[:MAX_LEADS // 3]
     if voices:
         say(f"Scout: found {len(voices)} posts on forums and review sites describing a target pain")
@@ -229,7 +298,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     say(f"Scout → Qualifier: {len(hits)} of {len(issues)} issues describe a target pain, from {len(by_author)} people; "
         f"passing the top {len(ranked)}" + (f", {len(web)} of them from the web" if web else ""))
 
-    icp_text = json.dumps(icp.model_dump(exclude={"competitors", "expansion"}))
+    icp_text = json.dumps(icp.model_dump(exclude={"competitors", "expansion", "channels", "process_areas"}))
 
     def qualify(item):
         login, signals = item
@@ -312,15 +381,20 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         lead.pop("_prompt")
         for s in lead["signals"]:
             s["excerpt"] = s["body"][:300]
-    return {**icp.model_dump(), "description": description, "product_repo": product_repo, "repos": repos}, leads
+    out = {**icp.model_dump(), "description": description, "product_repo": product_repo, "repos": repos,
+           "learned_pains": learned}
+    if sources is not None:
+        out["sources"] = sources  # the pages the description was read from
+    return out, leads
 
 
-def run(description: str, product_repo: str = "", review=None) -> None:
+def run(description: str, product_repo: str = "", review=None, sources: list[str] | None = None,
+        keep_log: bool = False) -> None:
     """The live run: build the leads, then write them to the graph the app reads."""
-    state.update(running=True, log=[], events=[], error="")
+    state.update(running=True, error="", **({} if keep_log else dict(log=[], events=[])))  # keep_log: the caller already logged
     try:
         billing.reset()
-        icp, leads = build_leads(description, product_repo)
+        icp, leads = build_leads(description, product_repo, sources=sources)
         json.dump(icp, open(ICP_PATH, "w"), indent=2)
         if review:
             review(leads)  # while the leads still carry the full issue text the Writer saw
@@ -341,6 +415,7 @@ def run(description: str, product_repo: str = "", review=None) -> None:
                 store.link("Person", "login", lead["login"], "RAISED", "Signal", "id", s["id"])
                 store.link("Signal", "id", s["id"], "ABOUT", "Repo", "name", s["repo"])
             store.log(lead["login"], "agent", "matched", lead["reason"])
+            billing.record("graph.query", lead["login"])  # the graph writes and reads behind this lead
         left = checks.check_leads(store.leads(), store.STAGES)
         say(f"Reviewer: self-check found {len(left)} problems across {len(leads)} leads"
             + (f" ({', '.join(sorted({f['rule'] for f in left}))})" if left else ""))

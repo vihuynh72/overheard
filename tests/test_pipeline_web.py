@@ -9,7 +9,8 @@ from app import pipeline, scout_web  # noqa: E402
 def _icp():
     s = pipeline.Scored(values=["x"], confidence=0.9)
     return pipeline.ICP(product="P", industries=s, company_size=s, personas=s, triggers=s, pains=["pain one"],
-                        negative_signals=[], expansion=[], competitors=[], tracker_fit=True, tracker_fit_reason="ok")
+                        negative_signals=[], expansion=[], competitors=[], tracker_fit=True, tracker_fit_reason="ok",
+                        channels=[], process_areas=[])
 
 
 def test_web_voices_get_a_reserved_share(monkeypatch):
@@ -21,7 +22,7 @@ def test_web_voices_get_a_reserved_share(monkeypatch):
     monkeypatch.setattr(pipeline, "gh", lambda path, **k: looked_up.append(path) or {})
     monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: issues)
     monkeypatch.setattr(pipeline, "match_pains", lambda *a: _done({i["id"]: ("pain one", 0.9) for i in issues}))
-    monkeypatch.setattr(scout_web, "find_voices", lambda pains, areas: voices)
+    monkeypatch.setattr(scout_web, "find_voices", lambda pains, areas, domains=None: voices)
     monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a: {"email": "", "email_status": "", "steps": ["x"]})
     monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
     monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)

@@ -12,28 +12,38 @@
 <link rel="stylesheet" href="/static/map.css">
 <link rel="stylesheet" href="/static/habitat.css">
 <link rel="stylesheet" href="/static/profile.css">
-<link rel="stylesheet" href="/static/voice.css">
+<link rel="stylesheet" href="/static/ask.css">
 <link rel="stylesheet" href="/static/pilot.css">
 </head>
-<body>
-<header class="top">
-  <a class="brand" href="/">Earshot</a>
-  <nav class="tabs" aria-label="Views">
-    <a href="#floor" data-view="floor">Floor</a>
-    <a href="#leads" data-view="leads">Leads</a>
-    <a href="#map" data-view="map">Map</a>
-    <a href="#pipeline" data-view="pipeline">Pipeline</a>
-    <a href="#profile" data-view="profile">Profile</a>
-    <a href="#activity" data-view="activity">Activity</a>
-  </nav>
-  <div class="top-end"><div id="voice"></div><p class="status" id="status" aria-live="polite"></p></div>
-</header>
-<main id="view"></main>
+<body class="app">
+<nav class="tabs rail" aria-label="Sections">
+  <button type="button" data-view="floor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5M6.5 10v9h11v-9"/></svg><span class="tip">Home</span></button>
+  <button type="button" data-view="leads"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M15.5 14.2c2.6-.3 4.5 1.3 5 4.3"/></svg><span class="tip">People</span></button>
+  <button type="button" data-view="map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="17" r="2"/><path d="M7.7 8.2 10.6 15.5M16.6 7.5 13.3 15.4M8 6.8l8-.6"/></svg><span class="tip">Map</span></button>
+  <button type="button" data-view="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></svg><span class="tip">Buyer</span></button>
+  <button type="button" data-view="proof"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5 6.5v5c0 4.2 2.9 7.4 7 9 4.1-1.6 7-4.8 7-9v-5z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span class="tip">Proof</span></button>
+  <button type="button" data-view="activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12h4l2.5-6 4 12 2.5-6h4"/></svg><span class="tip">Activity</span></button>
+</nav>
+<main class="home" id="home">
+  <a class="brand" href="#floor">Earshot</a>
+  <div class="home-grid">
+    <div class="home-top" id="home-top"></div>
+    <div class="home-habitat" id="mount-habitat"></div>
+  </div>
+  <p class="home-strip" id="home-strip"></p>
+</main>
+<section class="panel" id="panel" aria-labelledby="panel-title" inert>
+  <header class="panel-head view-head">
+    <h1 id="panel-title" tabindex="-1"></h1>
+    <button type="button" class="close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </header>
+  <div class="panel-body" id="view"></div>
+</section>
 <script src="/static/factory.js"></script>
 <script src="/static/map.js"></script>
 <script src="/static/habitat.js"></script>
 <script src="/static/profile.js"></script>
-<script src="/static/voice.js"></script>
+<script src="/static/ask.js"></script>
 <script src="/static/pilot.js"></script>
 <script src="/static/app.js"></script>
 </body>

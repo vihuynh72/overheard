@@ -23,6 +23,18 @@
   var H = 336;
 
   var lastShown = new WeakMap(); // container -> ts of the newest handoff already drawn
+  var opened = {}; // which folds the founder opened, kept across the 2-second re-render
+
+  // A section collapsed to one line; it expands on demand and stays as the founder left it.
+  function fold(cls, key, title, line) {
+    var d = el("details", "floor-section fold " + cls);
+    d.open = !!opened[key];
+    d.addEventListener("toggle", function () { opened[key] = d.open; });
+    var sm = el("summary");
+    sm.append(el("h2", null, title), el("span", "fold-line", line));
+    d.append(sm);
+    return d;
+  }
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -38,6 +50,7 @@
   }
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
   function pct(v) { var n = num(v); return Math.round(n <= 1 ? n * 100 : n); } // accepts 0.42 or 42
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
   function clock(ts) {
     var d = new Date(ts);
@@ -223,7 +236,10 @@
     agents.forEach(function (a) { names[a.key] = a.name || a.key; });
     var head = el("header", "floor-head");
     var newest = handoffs[handoffs.length - 1];
-    var h = el("h2", "floor-headline", newest ? newest.text : "The line is waiting for its first run.");
+    var waiting = (data.inbox || []).length;
+    var h = el("h2", "floor-headline", newest ? newest.text
+      : waiting ? "The last run is in. " + plural(waiting, "lead waits", "leads wait") + " on you."
+      : "The line is quiet until the next run.");
     var meta = el("p", "floor-meta");
     if (newest) {
       meta.append(el("span", "floor-mono", clock(newest.ts)), document.createTextNode("  " + (names[newest.from] || newest.from) + " handed to " + (names[newest.to] || newest.to)));
@@ -254,10 +270,9 @@
   /* 2. Why you can trust it */
 
   function trustSection(container, trust) {
-    var sec = el("section", "floor-section floor-trust");
-    sec.setAttribute("aria-labelledby", "floor-trust-h");
-    var h2 = el("h2", null, "Why you can trust it");
-    h2.id = "floor-trust-h";
+    var gs = trust.gates || [];
+    var metN = gs.filter(function (g) { return g.passed; }).length;
+    var sec = fold("floor-trust", "trust", "Trust", cap(String(trust.level || "unknown")) + " · " + metN + " of " + gs.length + " gates met");
     var side = el("div", "floor-level-col");
     var level = String(trust.level || "unknown");
     side.append(el("p", "floor-level", level));
@@ -322,7 +337,7 @@
 
     var body = el("div", "floor-trust-body");
     body.append(side, ladder);
-    sec.append(h2, body);
+    sec.append(body);
     return sec;
   }
 
@@ -332,29 +347,49 @@
     var sec = el("section", "floor-section floor-inbox");
     sec.append(el("h2", null, "Needs you"));
     if (!inbox.length) { sec.append(el("p", "floor-empty", "Nothing needs you. The line is running.")); return sec; }
-    var ul = el("ul");
-    inbox.forEach(function (it) {
-      var li = el("li");
+    function open(it) {
       var b = el("button", "floor-inbox-btn");
       b.type = "button";
       b.append(el("span", "floor-inbox-name", it.name || it.login), el("span", "floor-mono floor-login", it.login));
       b.addEventListener("click", function () {
         container.dispatchEvent(new CustomEvent("earshot:open", { bubbles: true, detail: { login: it.login } }));
       });
-      var r = el("ul", "floor-reasons");
-      (it.reasons || []).forEach(function (x) { r.append(el("li", null, x)); });
-      li.append(b, r);
-      ul.append(li);
+      return b;
+    }
+    // In supervised mode every draft carries the same reason; say it once instead of under every name.
+    var routine = /supervised mode/i;
+    var flagged = [], plain = [];
+    inbox.forEach(function (it) {
+      var own = (it.reasons || []).filter(function (x) { return !routine.test(String(x)); });
+      (own.length ? flagged : plain).push({ it: it, own: own });
     });
-    sec.append(ul);
+    var anyRoutine = inbox.some(function (it) { return (it.reasons || []).some(function (x) { return routine.test(String(x)); }); });
+    if (anyRoutine) sec.append(el("p", "floor-inbox-note", "Supervised mode: every draft waits for your yes. These have something else worth a look."));
+    if (flagged.length) {
+      var ul = el("ul");
+      flagged.forEach(function (f) {
+        var li = el("li");
+        var r = el("ul", "floor-reasons");
+        f.own.forEach(function (x) { r.append(el("li", null, x)); });
+        li.append(open(f.it), r);
+        ul.append(li);
+      });
+      sec.append(ul);
+    }
+    if (plain.length) {
+      sec.append(el("p", "floor-inbox-sub", plural(plain.length, "draft", "drafts") + " with nothing flagged, ready for a quick read"));
+      var chips = el("div", "floor-inbox-chips");
+      plain.forEach(function (f) { chips.append(open(f.it)); });
+      sec.append(chips);
+    }
     return sec;
   }
 
   /* 4. What it has learned */
 
   function lessonsSection(lessons) {
-    var sec = el("section", "floor-section floor-lessons");
-    sec.append(el("h2", null, "What it has learned"));
+    var openN = lessons.filter(function (l) { return l.status !== "fixed"; }).length;
+    var sec = fold("floor-lessons", "lessons", "What it has learned", lessons.length ? plural(lessons.length, "lesson", "lessons") + " · " + openN + " open" : "Nothing yet");
     if (!lessons.length) { sec.append(el("p", "floor-empty", "No lessons yet. It learns from what you change.")); return sec; }
     var ol = el("ol");
     lessons.slice().reverse().forEach(function (l) {
@@ -375,8 +410,8 @@
   /* 5. Proving ground */
 
   function simSection(sim) {
-    var sec = el("section", "floor-section floor-sim");
-    sec.append(el("h2", null, "Proving ground"));
+    var kinds = (sim && sim.by_kind || []).length;
+    var sec = fold("floor-sim", "sim", "Proving ground", kinds ? plural(num(sim.cases), "case", "cases") + " across " + plural(kinds, "product kind", "product kinds") : "Not run yet");
     if (!sim || !(sim.by_kind || []).length) { sec.append(el("p", "floor-empty", "No simulation has run yet.")); return sec; }
     var meta = el("p", "floor-meta");
     meta.append(el("span", "floor-mono", plural(num(sim.cases), "case", "cases")));
@@ -425,14 +460,9 @@
     data = data || {};
     container.replaceChildren();
     container.classList.add("floor");
-    var line = el("section", "floor-line");
-    line.setAttribute("aria-label", "The line");
-    line.append(headline(data), drawLine(container, data));
-    var lg = log(data);
-    if (lg) line.append(lg);
-    var pair = el("div", "floor-pair");
-    pair.append(inboxSection(container, data.inbox || []), lessonsSection(data.lessons || []));
-    container.append(line, trustSection(container, data.trust || {}), pair, simSection(data.simulation));
+    // The app's Proof section: the trust ladder, the lessons and the proving ground, each folded to one line.
+    // The track schematic, handoff log and inbox (drawLine, headline, log, inboxSection) stay for factory-demo.html.
+    container.append(trustSection(container, data.trust || {}), lessonsSection(data.lessons || []), simSection(data.simulation));
   }
 
   window.EarshotFactory = { render: render };

@@ -29,7 +29,7 @@ def by_key(gate_list):
 def test_agreement_counts_each_kind():
     a = trust.agreement([rec("release", "approve"), rec("hold", "reject"), rec("drop", "reject"),
                          rec("release", "reject"), rec("hold", "approve"), rec("drop", "approve")])
-    assert a == {"n": 6, "agree": 3, "rate": 0.5, "false_release": 1, "false_hold": 2}
+    assert a == {"n": 6, "agree": 3, "rate": 0.75, "false_release": 1, "false_hold": 2}  # 3 of 4 judged calls
 
 
 def test_agreement_empty_and_window():
@@ -41,7 +41,7 @@ def test_agreement_empty_and_window():
 
 
 def test_agreement_rate_is_rounded():
-    assert trust.agreement([MATCH, MATCH, rec("hold", "approve")])["rate"] == 0.67
+    assert trust.agreement([MATCH, MATCH, rec("release", "reject")])["rate"] == 0.67
 
 
 def test_gate_order_and_all_pass():
@@ -60,9 +60,11 @@ def test_self_check_gate():
 
 def test_agreement_gate():
     ok = by_key(make())["agreement"]
-    assert ok["passed"] and ok["value"] == "10 of 10 matched your decision"
-    low = by_key(make([MATCH] * 8 + [rec("hold", "approve")] * 2))["agreement"]  # 0.8 < 0.9
-    assert not low["passed"] and low["value"] == "8 of 10 matched your decision"
+    assert ok["passed"] and ok["value"] == "10 matched, 0 wrong releases, 0 held that you approved"
+    low = by_key(make([MATCH] * 8 + [rec("release", "reject")] * 2))["agreement"]  # 0.8 < 0.9
+    assert not low["passed"] and low["value"] == "8 matched, 2 wrong releases, 0 held that you approved"
+    cautious = by_key(make([MATCH] * 8 + [rec("hold", "approve")] * 2))["agreement"]  # caution is not error
+    assert cautious["passed"]
     few = by_key(make([MATCH] * 3))["agreement"]
     assert not few["passed"] and few["value"] == "3 of 8 decisions needed"
     edge = by_key(make([MATCH] * 9 + [rec("hold", "approve")]))["agreement"]  # exactly 0.9

@@ -17,6 +17,7 @@ SOURCES = {
     "stackoverflow": ["stackoverflow.com"],
     "smallbiz": ["reddit.com", "community.quickbooks.intuit.com", "community.xero.com", "quora.com"],
     "reviews": ["g2.com", "capterra.com", "trustradius.com"],
+    "x": ["x.com", "twitter.com"],  # public posts only; the handle in the URL identifies the author
 }
 PROCESS_AREAS = ["contracts", "invoicing", "collections", "revenue reporting", "usage metering"]
 
@@ -26,10 +27,44 @@ MIN_CONTENT = 80
 VENDOR_HOSTS = {"stripe.com", "chargebee.com", "zuora.com", "recurly.com", "paddle.com", "orb.dev", "metronome.com",
                 "flexprice.io", "freshbooks.com", "bill.com", "docusign.com"}
 VENDOR_PATHS = ("/pricing", "/product", "/features", "/blog/")
+LOGIN_HOSTS = {"linkedin.com"}  # needs a login to read, so no evidence link a human could open
+MAX_DOMAINS = 8
+_HOSTNAME = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
+_PRIVATE_TLDS = {"local", "internal", "localhost", "test", "example", "invalid", "lan"}
 
 
 def _domains() -> list[str]:
     return sorted({d for ds in SOURCES.values() for d in ds})
+
+
+def clean_domains(domains) -> list[str]:
+    """The Planner's channel hosts, made safe to search: bare public hostnames, no vendors, no login walls, at most 8."""
+    out: list[str] = []
+    for d in domains or []:
+        h = re.split(r"[/?#]", re.sub(r"^[a-z][a-z0-9+.-]*://", "", str(d).strip().lower()), maxsplit=1)[0]
+        h = h[4:] if h.startswith("www.") else h
+        if (not _HOSTNAME.match(h) or h.rsplit(".", 1)[1] in _PRIVATE_TLDS
+                or _on(h, LOGIN_HOSTS | VENDOR_HOSTS) or h in out):
+            continue
+        out.append(h)
+    return out[:MAX_DOMAINS]
+
+
+def _alnum(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def drop_sellers(voices: list[dict], names: list[str]) -> list[dict]:
+    """A post by the product's own company or a competitor is not a buyer. Names under four characters match too much."""
+    names = [n for n in map(_alnum, names) if len(n) >= 4]
+    kept = []
+    for v in voices:
+        host, parts = _host(v["url"]), urlparse(v["url"]).path.strip("/").split("/")
+        account = parts[0] if host in ("x.com", "twitter.com") else ""
+        handles = (_alnum(v.get("author") or ""), _alnum(account))
+        if not any(n in h for n in names for h in handles):
+            kept.append(v)
+    return kept
 
 
 def _words(s: str) -> set[str]:
@@ -57,11 +92,11 @@ def _on(host: str, domains) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
-def _is_vendor(url: str) -> bool:
+def _is_vendor(url: str, domains=None) -> bool:
     host, path = _host(url), urlparse(url).path.lower()
     if _on(host, VENDOR_HOSTS):
         return True
-    return any(p in path for p in VENDOR_PATHS) and not _on(host, _domains())
+    return any(p in path for p in VENDOR_PATHS) and not _on(host, domains or _domains())
 
 
 def _author(url: str) -> str:
@@ -92,17 +127,17 @@ def _tavily_search(per_query: int):
         import tavily  # imported at call time so a missing key or package costs nothing
         client = tavily.TavilyClient(os.environ["TAVILY_API_KEY"])
         return client.search(query=query, include_domains=domains, max_results=per_query,
-                             search_depth="basic")["results"]
+                             search_depth="basic", time_range="year")["results"]  # recent posts only
     return search
 
 
 def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None,
-                per_query: int = 5, min_score: float = 0.45) -> list[dict]:
+                per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None) -> list[dict]:
     if search is None:
         if not os.environ.get("TAVILY_API_KEY"):
             return []
         search = _tavily_search(per_query)
-    domains = _domains()
+    domains = clean_domains(domains) or _domains()  # the Planner's channels, else every known source
     best: dict[str, dict] = {}
     for q in queries(pains, areas):
         try:
@@ -116,7 +151,7 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
                 score = float(r.get("score"))
             except (TypeError, ValueError):
                 continue
-            if not url or score < min_score or len(content) < MIN_CONTENT or _is_vendor(url):
+            if not url or score < min_score or len(content) < MIN_CONTENT or _is_vendor(url, domains):
                 continue
             if url in best and best[url]["match"] >= round(score, 2):
                 continue
