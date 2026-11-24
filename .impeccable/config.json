@@ -5,7 +5,8 @@
     ],
     "ignoreFiles": [
       "demo/film/film.css",
-      "static/landing.html"
+      "static/landing.html",
+      "demo/film/film2.css"
     ],
     "ignoreValues": [
       {

@@ -65,9 +65,16 @@ function headline(p) {
   return cap(w.join(" "));
 }
 // The buyer in at most six words, cut at a natural phrase; the phrase after the noun goes in italic.
+// Self-check (real Planner titles): "Backend / platform engineers" → Backend <em>engineers</em>; "Backend/platform engineer building billing" →
+// Backend engineer <em>building billing</em>; "Founding engineer or CTO of AI startup" → Founding <em>engineer</em>; "CTO or technical founder" →
+// Technical <em>founder</em>; "Head of Engineering" → Head of <em>Engineering</em>; "Product manager owning pricing and packaging" → Product manager <em>owning pricing</em>.
 function buyer(role) {
-  let w = String(role || "").replace(/\s*\(.*?\)/g, "").replace(/(\w+)\/[\w-]+/g, "$1").split(/\s+(?:at|who|with|for|in)\s+|,/i)[0].trim().split(/\s+/).slice(0, 6);
+  let w = String(role || "").replace(/\s*\(.*?\)/g, "").replace(/(\w+)\s*\/\s*[\w-]+/g, "$1").split(/\s+(?:at|who|with|for|in|of an?)\s+|,/i)[0].trim().split(/\s+/);
+  const k = w.findIndex((x, j) => j > 0 && /^(or|and)$/i.test(x));  // cut at the first "or"/"and" when two words stand before it; "CTO or X" takes X
+  if (k >= 2) w = w.slice(0, k); else if (k === 1 && /^or$/i.test(w[1]) && w.length > 3) w = w.slice(2);
+  w = w.slice(0, 6);
   while (w.length > 2 && STOP.test(w.at(-1))) w.pop();
+  if (w.length < 2) return esc(cap(w.join(" ")));
   const i = w.findIndex((x, k) => k > 0 && /ing$/i.test(x)), at = i > 0 ? i : Math.max(1, w.length - 1);
   return `${esc(cap(w.slice(0, at).join(" ")))} <em>${esc(w.slice(at).join(" "))}</em>`;
 }
@@ -148,8 +155,9 @@ function homeCustomer(d, example) {
   const banner = example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours.</span><button type="button" class="linkish" data-example-off>Use my website</button></p>` : "";
   const hero = `<header class="hero${enter(example ? "s-hero" : "h-hero")}"><div class="wrap">${banner}
     <p class="label">${status.error ? "Last run stopped" : "Your customer"}</p>
-    <h1 class="display" id="home-line">${status.error ? esc(status.error) : role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
-    ${line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
+    <h1 class="display" id="home-line">${status.error ? "The last run <em>stopped</em>" : role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
+    ${status.error ? `<p class="hero-desc">${esc(String(status.error).replace(/^[A-Za-z]+Error:\s*/, ""))} These results are from the run before.</p>` : line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
+    ${example || status.running ? "" : proofLine(d)}
     ${nextAction(d, example)}
     ${sites.length && n ? `<div class="logos"><p class="label bare">Heard from <span class="num">${n}</span> ${n === 1 ? "person" : "people"} on</p>
       <ul class="logo-row">${sites.map(s => `<li><a href="https://${esc(s)}" target="_blank" rel="noopener">${esc(s.replace(/^(www|news)\./, ""))}</a></li>`).join("")}</ul></div>` : ""}
@@ -176,7 +184,7 @@ function fullProfile(i, said) {
   const list = xs => `<ul class="st-lines">${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
   const exp = (i.expansion || []).filter(x => x.segment).map(x => { const a = said[x.segment], seg = esc(x.segment);
     const pills = ["accept", "dismiss"].filter(k => k !== a).map(k => `<button type="button" class="pill sm" data-expand="${k}" data-segment="${seg}">${a ? (k === "accept" ? "Add instead" : "Dismiss instead") : k === "accept" ? "Add" : "Dismiss"}</button>`).join("");
-    return `<li class="exp"><span><b>${seg}</b> ${esc(x.reasoning || "")}</span><span class="exp-act">${a ? `<span class="meta">${a === "accept" ? "Added" : "Dismissed"}</span>` : ""}${pills}</span></li>`; });
+    return `<li class="exp"><span><b>${seg}</b> ${esc(x.reasoning || "")}</span><span class="exp-act">${flashFor(x.segment) || (a ? `<span class="meta">${a === "accept" ? "Added" : "Dismissed"}</span>` : "")}${pills}</span></li>`; });
   const comp = (i.competitors || []).filter(c => c.name).map(c => `<li><b>${esc(c.name)}</b> <span class="meta">${esc(c.category || "")}</span><br>${esc(c.positioning || "")}${c.github_repo ? ` · ${ext("https://github.com/" + c.github_repo, c.github_repo + " ↗")}` : ""}</li>`);
   const rows = [
     ["Industries", vals(i.industries), list],
@@ -234,20 +242,142 @@ const RUN = [
   {name: "Writing to each", done: /^Done:/,
     result: log => { const m = log.map(l => l.match(/(\d+) messages drafted/)).find(Boolean); return m && plural(+m[1], "message", "messages"); }},
 ];
+// --- the working line: what the run is doing now, read from its newest log line; nothing here advances on a timer ---
+// Every log line carries the server's own timestamp (status.events is appended with it in pipeline.say).
+const tsOf = (d, i) => Date.parse(d.status.events?.[i]?.ts || "") || null;
+function runStart(d) {
+  const t = tsOf(d, 0);
+  if (t || !d.status.running) return t;
+  // The log is empty for a moment after the start: the first poll that saw the run stands in, and a reload keeps it.
+  try { const s = +sessionStorage.getItem("earshot.runStart"); if (s) return s; sessionStorage.setItem("earshot.runStart", String(Date.now())); } catch (e) { /* storage blocked */ }
+  return Date.now();
+}
+const dur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`; };
+const offset = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `+${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const ago = ms => { const m = Math.floor(ms / 60000); return m < 1 ? "just now" : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ago`; };
+// The product's own mark; its two arcs pulse outward while it listens (CSS, transform and opacity only).
+const GLYPH = `<svg class="glyph" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="10" r="1.75" fill="currentColor" stroke="none"/><path class="g1" d="M9 6.5a5 5 0 0 1 0 7"/><path class="g2" d="M12 3.6a9 9 0 0 1 0 12.8"/></svg>`;
+const bareHost = s => String(s).replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+const postsRead = log => log.reduce((n, l) => n + +(l.match(/^Scout: \S+ has (\d+) issues/)?.[1] || 0), 0);
+// Log line → [verb, object]: what the run does next after that line. Lines not listed (drops, notes) keep the verb before them.
+function working(log) {
+  const watched = (log.map(l => l.match(/^Planner → Scout: watch \d+ public issue trackers \((.*)\)/)).find(Boolean)?.[1] || "").split(", ").filter(x => x && x !== "none found");
+  const sites = (log.map(l => l.match(/^Planner → Scout: listening on (.+)$/)).find(Boolean)?.[1] || "").split(/, | and /).filter(Boolean);
+  const heard = new Set(["github.com"]);
+  log.forEach(l => { if (/Hacker News/.test(l)) heard.add("news.ycombinator.com"); if (/Reddit/.test(l)) heard.add("reddit.com"); });
+  const posts = postsRead(log), match = ["Matching", `${posts} posts by meaning`];
+  const next = repo => { const n = watched[watched.indexOf(repo) + 1]; return n ? ["Listening on", `github.com/${n}`] : ["Learning", "how they say it"]; };
+  const VERBS = [
+    [/^Planner: reading (\S+)/, m => ["Reading", bareHost(m[1])]],
+    [/^Planner: inferring/, () => ["Naming", "your customer"]],
+    [/^Planner → Scout: watch/, () => watched.length ? ["Listening on", `github.com/${watched[0]}`] : ["Learning", "how they say it"]],
+    [/^Scout: (\S+) has \d+ issues/, m => next(m[1])],
+    [/^Scout: learned/, () => ["Choosing", "where to listen"]],
+    [/^(Planner → Scout: listening on|Scout: .*(Hacker News|Reddit|web searches))/, () => { const n = sites.find(s => !heard.has(s)); return n ? ["Listening on", n] : match; }],
+    [/^Scout: (found|dropped) \d+ posts/, () => match],
+    [/^Scout → Qualifier: .*passing the top (\d+)/, m => ["Checking", `${m[1]} people one by one`]],
+    [/^Scout → Qualifier/, () => ["Checking", "each person"]],
+    [/^Qualifier → Enricher: scored; looking/, () => ["Looking up", "work emails"]],
+    [/^Qualifier → Enricher/, () => ["Writing", "to each person"]],
+    [/^Enricher → Writer: (\d+) leads kept/, m => ["Writing", plural(+m[1], "message", "messages")]],
+    [/^Writer → Reviewer/, () => ["Checking", "every claim against what they wrote"]],
+    [/^Reviewer → Writer: (\d+) drafts broke/, m => ["Rewriting", `${m[1]} that broke a writing rule`]],
+    [/^Reviewer: checked .*; (\d+) make a claim/, m => +m[1] ? ["Rewriting", `${m[1]} that said too much`] : ["Running", "its own checks"]],
+    [/^Reviewer → Writer: .*claimed more/, () => ["Running", "its own checks"]],
+    [/^Done:/, () => ["Done", ""]],
+    [/^Failed:/, () => ["Stopped", ""]],
+  ];
+  for (let i = log.length - 1; i >= 0; i--) for (const [re, f] of VERBS) { const m = log[i].match(re); if (m) return f(m); }
+  return ["Starting", ""];
+}
+const phraseOf = ([v, o]) => v === "Done" || v === "Stopped" ? `${v}.` : `${v}${o ? " " + o : ""}…`;
+// Credits the ledger recorded since this run began.
+const spentSince = (d, start) => start ? (d.billing?.ledger || []).filter(e => e.ok && Date.parse(e.ts) >= start).reduce((n, e) => n + Number(e.credits || 0), 0) : 0;
+const fmtCredits = n => `${+n.toFixed(1)} ${n === 1 ? "credit" : "credits"}`;
+// One live counter that fits the step: posts read, then people found or kept, then messages written.
+function counter(d, cur) {
+  const log = d.status.log || [], g = re => logm(d, re), posts = postsRead(log);
+  const kept = g(/^Enricher → Writer: (\d+) leads kept/), found = g(/from (\d+) people/), msgs = g(/(\d+) messages drafted/);
+  return [null, null, posts ? `${posts} posts read` : null, kept ? `${kept[1]} kept` : found ? `${found[1]} people found` : null, msgs ? plural(+msgs[1], "message", "messages") + " written" : null][cur] || null;
+}
+// The tool a line implies, from what the step does.
+const TOOLS = [[/^Planner: reading/, "Tavily"], [/issue trackers|has \d+ issues/, "GitHub"], [/Hacker News/, "Hacker News"], [/Reddit/, "Reddit"], [/web searches|forums and review sites|^Planner → Scout: listening/, "Tavily"],
+  [/describe a target pain/, "Moss"], [/business email|verified by Hunter/, "Hunter"], [/second model/, "SubQ"], [/credit/i, "Flexprice"], [/^(Planner|Qualifier|Writer|Reviewer|Scout: learned)/, "Claude"]];
+const toolOf = l => (TOOLS.find(([re]) => re.test(l)) || [])[1] || "";
+const tag = l => { const t = toolOf(l); return t ? `<span class="tool">${t}</span>` : ""; };
+// Numbers in a new row count up once; digits inside an escaped entity are left alone.
+const countable = html => html.replace(/(?<![#\w;&])\d+(?![\w;])/g, n => `<span class="cu" data-to="${n}">${n}</span>`);
+function trail(d, start) {
+  const log = d.status.log || [], seen = ui.trailSeen ?? log.length, all = ui.trailAll || log.length <= 6;
+  const rows = log.map((l, i) => { const age = log.length - 1 - i, isNew = i >= seen, t = tsOf(d, i);
+    const text = esc(cap(PLAIN(strip(l))));
+    return `<li class="tr${isNew ? " is-new" : ""}${!all && age >= 6 ? " is-gone" : ""}${!all && age === 5 ? " is-far" : !all && age === 4 ? " is-old" : ""}">
+      <span class="tr-t num">${t && start ? offset(t - start) : ""}</span><span class="tr-x" title="${text}">${isNew ? countable(text) : text}</span><span class="tr-tag">${tag(l)}</span></li>`; }).join("");
+  return `<div class="trail-wrap"><p class="label">Live</p><ol class="trail">${rows || `<li class="tr"><span class="tr-t num">+0:00</span><span class="tr-x">Starting.</span><span class="tr-tag"></span></li>`}</ol>
+    ${all ? "" : `<button type="button" class="linkish" data-trail-all>Show all ${log.length}</button>`}</div>`;
+}
 function runView() {
-  const log = ui.data.status.log || [];
+  const d = ui.data, log = d.status.log || [], start = runStart(d);
   const doneAt = RUN.map(s => log.findIndex(l => s.done.test(l)));
-  const cur = doneAt.findIndex(i => i < 0);
+  const cur = doneAt.findIndex(i => i < 0), step = cur < 0 ? 5 : cur + 1;
   const site = ui.target ? hostOf(/^https?:/.test(ui.target) ? ui.target : "https://" + ui.target) || ui.target : "";
-  return `<header class="hero"><div class="wrap" aria-live="polite"><p class="label">Earshot</p>
-    <h1 class="display">Finding your <em>customers</em></h1>${site ? `<p class="hero-line">${esc(site)}</p>` : ""}<p class="hero-desc">About two minutes.</p></div></header>
-    <section class="sec"><div class="wrap"><ul class="rows">${RUN.map((s, i) => {
+  const phrase = phraseOf(working(log)), fresh = ui.phrase !== undefined && phrase !== ui.phrase; ui.phrase = phrase;
+  const last = tsOf(d, log.length - 1) || start, count = counter(d, cur), spent = spentSince(d, start);
+  const meta = [`<span data-elapsed="${start}">${dur(Date.now() - start)}</span>`, `step ${step} of 5`, count, spent ? `${fmtCredits(spent)} used` : null].filter(Boolean).join(`<span class="dot" aria-hidden="true">·</span>`);
+  const html = `<header class="hero run-hero"><div class="wrap"><p class="label">Earshot${site ? ` · ${esc(site)}` : ""}</p>
+    <h1 class="display">Finding your <em>customers</em></h1>
+    <p class="work" aria-live="polite">${GLYPH}<span class="work-verb${fresh ? " is-new" : ""}">${esc(phrase)}</span></p>
+    <p class="work-meta num"><span class="work-still" data-still="${last}"${Date.now() - last > 20000 ? "" : " hidden"}>Still working<span class="dot" aria-hidden="true">·</span></span>${meta}</p></div></header>
+    <section class="sec"><div class="wrap"><ul class="rows run-steps">${RUN.map((s, i) => {
       const state = doneAt[i] >= 0 ? "done" : i === cur ? "now" : "next";
-      const note = state === "done" ? s.result?.(log) : state === "now" ? strip(log.at(-1) || "Starting.") : "";
-      return `<li><div class="r" data-state="${state}"${state === "now" ? ` aria-current="step"` : ""}><span class="r-k">${state === "done" ? TICK : `0${i + 1}`}</span>
-        <span class="r-t">${s.name}<span class="visually-hidden">${state === "done" ? ", done" : state === "now" ? ", in progress" : ""}</span></span><span class="r-n">${esc(note || "")}</span></div></li>`;
-    }).join("")}</ul>
-    <details class="nosite live" data-fold="live" ${ui.open.live ? "open" : ""}><summary>Live</summary><ul class="st-lines">${log.map(l => `<li>${esc(PLAIN(l))}</li>`).join("")}</ul></details></div></section>`;
+      const from = i ? tsOf(d, doneAt[i - 1]) : start, to = tsOf(d, doneAt[i]);
+      const took = state === "done" && from && to ? dur(to - from) : "";
+      const drawn = state === "done" && !ui.ticked.has(i) && ui.trailSeen !== undefined; if (state === "done") ui.ticked.add(i);
+      const note = state === "done" ? [s.result?.(log), took].filter(Boolean).join(" · ") : state === "now" && from ? `<span data-elapsed="${from}">${dur(Date.now() - from)}</span>` : "";
+      return `<li><div class="r" data-state="${state}"${state === "now" ? ` aria-current="step"` : ""}><span class="r-k${drawn ? " draw" : ""}">${state === "done" ? TICK : state === "now" ? GLYPH : `0${i + 1}`}</span>
+        <span class="r-t">${s.name}<span class="visually-hidden">${state === "done" ? ", done" : state === "now" ? ", in progress" : ""}</span></span><span class="r-n num">${state === "done" ? esc(note) : note}</span></div></li>`;
+    }).join("")}</ul>${trail(d, start)}</div></section>`;
+  ui.trailSeen = log.length;
+  return html;
+}
+// The run's working line, small, in the floating nav on every page; at rest, a still dot and one word.
+function navStatus() {
+  const el = $("nav-status"), d = ui.data;
+  if (!el || !d) return;
+  const running = d.status.running, log = d.status.log || [], start = running ? runStart(d) : 0;
+  const text = running ? phraseOf(working(log)) : d.status.error ? "Last run stopped" : log.some(l => /^Done:/.test(l)) || d.leads.length ? "Up to date" : "Ready";
+  const key = running + text;
+  el.dataset.state = running ? "run" : "idle";
+  el.toggleAttribute("data-err", !running && !!d.status.error);
+  el.setAttribute("aria-label", running ? `Run in progress: ${text}` : text);
+  if (el.dataset.key === key) return;  // unchanged: leave the glyph's pulse running
+  el.dataset.key = key;
+  el.innerHTML = running ? `${GLYPH}<span class="ns-t">${esc(text)}</span><span class="ns-m num" data-elapsed="${start}">${dur(Date.now() - start)}</span>` : `<i class="ns-dot" aria-hidden="true"></i><span class="ns-t">${text}</span>`;
+}
+// A finished run's proof, one quiet line: when, how long, how much it read and spent.
+function proofLine(d) {
+  const log = d.status.log || [], i = log.findIndex(l => /^Done:/.test(l)), start = runStart(d), end = i >= 0 ? tsOf(d, i) : null;
+  if (!end) return "";
+  const posts = postsRead(log), spent = spentSince(d, start);
+  const parts = [`Finished <span data-ago="${end}">${ago(Date.now() - end)}</span>`, start ? `took ${dur(end - start)}` : "", posts ? `${posts} posts read` : "", spent ? `${fmtCredits(spent)} used` : ""].filter(Boolean);
+  return `<p class="proof num"><a href="#activity">${parts.join(`<span class="dot" aria-hidden="true">·</span>`)}</a></p>`;
+}
+// Ticks between polls: elapsed clocks every second, "ago" each minute, and the quiet "Still working" after 20 s without a new line.
+function tick() {
+  const now = Date.now();
+  document.querySelectorAll("[data-elapsed]").forEach(el => { const t = dur(now - +el.dataset.elapsed); if (el.textContent !== t) el.textContent = t; });
+  document.querySelectorAll("[data-ago]").forEach(el => { const t = ago(now - +el.dataset.ago); if (el.textContent !== t) el.textContent = t; });
+  document.querySelectorAll("[data-still]").forEach(el => { el.hidden = now - +el.dataset.still <= 20000; });
+}
+// New rows' numbers tick up from zero over about 400 ms, once.
+function countUp() {
+  const els = document.querySelectorAll(".cu[data-to]");
+  if (!els.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return els.forEach(e => e.removeAttribute("data-to"));
+  const t0 = performance.now();
+  const step = t => { const p = Math.min(1, (t - t0) / 400), e = 1 - (1 - p) ** 3;
+    els.forEach(el => { if (el.isConnected && el.dataset.to) el.textContent = Math.round(+el.dataset.to * e); });
+    if (p < 1) requestAnimationFrame(step); else els.forEach(el => el.removeAttribute("data-to")); };
+  requestAnimationFrame(step);
 }
 function failedView() {
   const err = String(ui.data.status.error || "").replace(/^[A-Za-z]+Error:\s*/, "");
@@ -277,7 +407,7 @@ function renderHome() {
   } else slot.innerHTML = mode === "running" ? runView() : mode === "failed" ? failedView() : homeCustomer(mode === "example" ? SAMPLE : ui.data, mode === "example");
   $("home-strip").innerHTML = mode === "home" ? homeStrip() : "";
   $("home-strip").hidden = mode !== "home";
-  reveal();
+  reveal(); countUp();
 }
 
 // A fixed picture of a finished Flexprice run, shown before anything is run. Links search the real trackers; nothing is invented about the people beyond their public titles.
@@ -325,16 +455,20 @@ function board(shown, stages) {
   const card = l => { const open = ui.moving === l.login;
     return `<li class="bcard" draggable="true" data-drag="${esc(l.login)}"><button type="button" class="bc-open" data-open="${esc(l.login)}">${avatar(l)}
       <span class="bc-name">${esc(whoOf(l))}<small class="meta">${esc([l.company, `Score ${l.score}`].filter(Boolean).join(" · "))}</small></span></button>
-      <p class="bc-foot"><span>moved by ${esc(who(l.stage_actor) || "Earshot")}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
+      <p class="bc-foot"><span>${flashFor(l.login) || `moved by ${esc(who(l.stage_actor) || "Earshot")}`}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
       <div class="mv-menu" id="mv-${esc(l.login)}" role="group" aria-label="Move ${esc(whoOf(l))} to"${open ? "" : " hidden"}>${stages.map(s => `<button type="button" data-stage-to="${esc(s)}" data-login="${esc(l.login)}"${s === l.stage ? ` aria-current="true" disabled` : ""}>${esc(s)}</button>`).join("")}</div></li>`; };
   return `<div class="board${enter("board")}">${stages.map(s => { const ls = shown.filter(l => l.stage === s);
     return `<section class="col" data-drop="${esc(s)}" aria-label="${esc(s)}"><p class="label bare">${esc(s)} <span class="num">${ls.length}</span></p><ul class="col-list">${ls.map(card).join("")}</ul></section>`; }).join("")}</div>`;
 }
 async function moveTo(login, stage) {
   ui.moving = null;
-  try { await api(`/api/leads/${encodeURIComponent(login)}/stage`, {stage}); } catch (err) { console.error(err); }
+  document.querySelector(`[data-move="${CSS.escape(login)}"]`)?.setAttribute("aria-busy", "true");
+  try { await api(`/api/leads/${encodeURIComponent(login)}/stage`, {stage}); flash(login, `Moved to ${stage}`); } catch (err) { flash(login, err.message, true); }
   refresh(true);
 }
+// A confirmation beside the control that made it, gone after 2 s; a failure stays, in the server's words, until the next try.
+function flash(at, text, err) { ui.flash = {at, text, err, t: Date.now()}; if (!err) setTimeout(() => { if (ui.flash?.at === at && !ui.flash.err) { ui.flash = null; } }, 2000); }
+const flashFor = at => ui.flash?.at === at && (ui.flash.err || Date.now() - ui.flash.t < 2000) ? `<span class="flash${ui.flash.err ? " err" : ""}" role="${ui.flash.err ? "alert" : "status"}">${esc(ui.flash.text)}</span>` : "";
 
 function detail() {
   const el = $("detail");
@@ -403,7 +537,8 @@ function activityView() {
   const rows = [...billing.ledger].sort((a, b) => String(b.ts).localeCompare(String(a.ts))), capN = 12, shown = ui.ledgerAll ? rows : rows.slice(0, capN);
   const sending = m.connected ? `Gmail${m.address ? ` · ${esc(m.address)}` : ""}` : m.resend ? "a test inbox" : "nowhere yet";
   const block = (id, k, title, body) => `<section class="sec" id="${id}" style="border-top:0;padding-top:0">${secHead(k, title)}${body}</section>`;
-  const logRows = re => { const ls = log.filter(l => STEP_OF.findIndex(x => x.test(l)) === re); return ls.length ? `<ul class="rows">${ls.map(l => `<li><div class="r"><span class="r-k">${TICK}</span><span class="r-t" style="font-size:var(--text-sm)">${esc(cap(PLAIN(strip(l))))}</span><span class="r-n"></span></div></li>`).join("")}</ul>` : ""; };
+  const t0 = runStart(d);  // each line at its offset from the start, with the tool it used
+  const logRows = re => { const ls = log.map((l, i) => [l, i]).filter(([l]) => STEP_OF.findIndex(x => x.test(l)) === re); return ls.length ? `<ul class="rows">${ls.map(([l, i]) => `<li><div class="r"><span class="r-k num">${t0 && tsOf(d, i) ? offset(tsOf(d, i) - t0) : TICK}</span><span class="r-t" style="font-size:var(--text-sm)">${esc(cap(PLAIN(strip(l))))}</span><span class="r-n">${tag(l)}</span></div></li>`).join("")}</ul>` : ""; };
   const steps = story(d, false), NAMES = ["Read", "Listened", "Found", "Kept", "Wrote and reviewed"];
   const extra = [
     "", "", "",
@@ -470,12 +605,22 @@ function renderPanel() {
   ui.shown = v;
 }
 
-function render() { renderHome(); renderPanel(); }
+function render() { renderHome(); renderPanel(); navStatus(); }
 
+// Demo replay, off unless the URL says ?replay=1: re-plays the last real run's log one line every 1.5 s, then finishes.
+// Read-only: it rewrites only what this page shows (timestamps become replay time) and never posts anything.
+const REPLAY = new URLSearchParams(location.search).get("replay") === "1" ? {t0: 0, log: null} : null;
+function replayed(real) {
+  if (!REPLAY.log) { REPLAY.log = real.status.log || []; REPLAY.t0 = Date.now(); }
+  const n = Math.min(REPLAY.log.length, Math.floor((Date.now() - REPLAY.t0) / 1500)), log = REPLAY.log.slice(0, n);
+  return {...real, status: {running: n < REPLAY.log.length, error: "", log, events: log.map((l, i) => ({ts: new Date(REPLAY.t0 + (i + 1) * 1500).toISOString(), text: l}))}};
+}
 async function refresh(force) {
   try {
-    const data = await api("/api/state"), json = JSON.stringify(data);
+    const real = await api("/api/state"), data = REPLAY ? replayed(real) : real, json = JSON.stringify(data);
     if (!force && json === ui.json) return;  // nothing changed: leave focus and typing alone
+    if (data.status.running && !ui.data?.status.running && ui.data) { ui.ticked.clear(); ui.trailSeen = 0; ui.phrase = undefined; ui.trailAll = false; }  // a new run: every line is new
+    if (!data.status.running) try { sessionStorage.removeItem("earshot.runStart"); } catch (e) { /* blocked */ }
     ui.data = data; ui.json = json;
     window.EarshotAsk?.update(data, ASK);
     if (!ui.desc && !ui.target && data.icp?.sources?.length) ui.target = data.icp.sources[0];
@@ -513,6 +658,7 @@ document.addEventListener("click", async e => {
   if (e.target.closest("[data-example-off]")) { flip("example", false); return $("target")?.focus(); }
   if (e.target.closest("[data-restart]")) { flip("restart", true); return $("target")?.focus(); }
   if (e.target.closest("[data-restart-off]")) return flip("restart", false);
+  if (e.target.closest("[data-trail-all]")) { ui.trailAll = true; renderHome(); return; }
   if (e.target.closest("[data-ledger-all]")) { ui.ledgerAll = true; renderPanel(); return; }
   const lay = e.target.closest("[data-layout]");
   if (lay) { ui.layout = lay.dataset.layout; try { localStorage.setItem("earshot.layout", ui.layout); } catch (err) { /* blocked */ } renderPanel(); return; }
@@ -527,7 +673,9 @@ document.addEventListener("click", async e => {
     return;
   }
   const ex = e.target.closest("[data-expand]");
-  if (ex) { try { await api("/api/expansion", {segment: ex.dataset.segment, action: ex.dataset.expand}); } catch (err) { console.error(err); } refresh(true); return; }
+  if (ex) { ex.setAttribute("aria-busy", "true");
+    try { await api("/api/expansion", {segment: ex.dataset.segment, action: ex.dataset.expand}); flash(ex.dataset.segment, ex.dataset.expand === "accept" ? "Added" : "Dismissed"); } catch (err) { flash(ex.dataset.segment, err.message, true); }
+    refresh(true); return; }
   if (e.target.closest("[data-review]")) { document.querySelector(".ask-chip-pill")?.click(); return; }  // the same open the corner chip does
   const sc = e.target.closest("[data-scroll]");
   if (sc) { $(sc.dataset.scroll)?.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); return; }
@@ -585,4 +733,5 @@ const moved = () => { const to = MOVED[location.hash.slice(1)]; if (to) location
 addEventListener("hashchange", () => { if (!moved()) ui.data && renderPanel(); });
 moved();
 refresh(true);
-setInterval(refresh, 2000);
+setInterval(refresh, REPLAY ? 750 : 2000);
+setInterval(tick, 1000);
