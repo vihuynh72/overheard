@@ -1,40 +1,43 @@
-/* Hallmark · macrostructure: Workbench · tone: editorial-utilitarian · anchor hue: 85 paper / 260 ink
- * theme: custom (vibe: "book paper ground, navy ink, ink-blue for action, burnt amber for the one highlight, evidence first")
- * ground oklch(97.5% 0.008 85) · accent oklch(38% 0.1 260) ink-blue · highlight oklch(52% 0.13 55) amber · Newsreader + Geist + Geist Mono
- * axes: light / classical-serif / warm
- */
+/* Earshot design tokens. The system is the one measured on officialjp.com/work:
+ * warm paper ground, ink text, hierarchy from type and space, Inter for text, Instrument Serif for display with italic emphasis.
+ * Mono is for the credits ledger numbers only. */
 :root {
   color-scheme: light;
-  --color-paper: oklch(97.5% 0.008 85);
-  --color-paper-2: oklch(95.2% 0.011 85);
-  --color-paper-3: oklch(91.8% 0.014 85);
-  --color-rule: oklch(87% 0.012 85);
-  --color-control: oklch(62% 0.018 265);
-  --color-muted: oklch(47% 0.025 265);
-  --color-ink: oklch(22% 0.03 265);
-  --color-accent: oklch(38% 0.1 260);
-  --color-accent-strong: oklch(30% 0.09 260);
-  --color-on-accent: oklch(97.5% 0.008 85);
-  --color-gold: oklch(52% 0.13 55);
-  --color-good: oklch(47% 0.09 165);
-  --color-danger: oklch(50% 0.16 28);
-  --color-focus: oklch(52% 0.13 55);
-  --color-shadow: oklch(30% 0.03 265 / 0.14);
+  --color-paper: rgb(250, 248, 245);
+  --color-paper-2: rgb(242, 238, 233);     /* soft tint: card media, see-more pill */
+  --color-paper-3: rgba(222, 216, 207, 0.5); /* current nav pill */
+  --color-rule: rgb(222, 216, 207);
+  --color-control: rgb(196, 188, 177);
+  --color-muted: rgb(83, 77, 70);
+  --color-ink: rgb(37, 33, 29);
+  --color-accent: rgb(37, 33, 29);         /* the primary control is an ink pill */
+  --color-accent-strong: rgb(0, 0, 0);
+  --color-on-accent: rgb(250, 248, 245);
+  --color-glass: rgba(255, 255, 255, 0.55);
+  --color-good: rgb(58, 110, 78);
+  --color-danger: rgb(160, 52, 38);
+  --color-focus: rgb(37, 33, 29);
+  --shadow-card: 0 12px 30px rgba(90, 75, 55, 0.1);
+  --shadow-float: 0 14px 40px rgba(90, 75, 55, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.85);
+  --shadow-nav: 0 8px 24px rgba(90, 75, 55, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.85);
 
-  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
-  --font-body: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.5rem;
-  --text-2xl: 2rem;
-  --text-quote: 1.1875rem;
-  --text-display: clamp(1.875rem, 1.1rem + 2.2vw, 3rem);
-  --track-label: 0.08em;
-  --measure: 68ch;
+  --text-2xs: 0.6875rem;   /* 11px card meta */
+  --text-xs: 0.75rem;      /* 12px labels, buttons */
+  --text-sm: 0.875rem;     /* 14px small text */
+  --text-base: 1rem;       /* 16px */
+  --text-lg: 1.125rem;     /* 18px list titles */
+  --text-card: 1.2rem;     /* 19.2px card titles */
+  --text-xl: 1.75rem;      /* 28px */
+  --text-2xl: clamp(2.25rem, 1.6rem + 2vw, 3rem);       /* 48px section heading */
+  --text-display: clamp(2.75rem, 1.4rem + 4.6vw, 4.5rem); /* 72px hero */
+  --track-label: 0.3em;
+  --track-meta: 0.22em;
+  --measure: 62ch;
+  --wrap: 1070px;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -44,15 +47,16 @@
   --space-8: 2rem;
   --space-12: 3rem;
   --space-16: 4rem;
+  --space-24: 6rem;
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-pill: 999px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-short: 150ms;
   --dur: 220ms;
-  --dur-enter: 420ms;
-  --stagger: 30ms;
+  --dur-enter: 600ms;
   --avatar: 2rem;
 }

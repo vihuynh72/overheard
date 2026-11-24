@@ -30,12 +30,15 @@ window.EarshotAsk = (() => {
   const dur = () => reduced.matches ? 0 : 240;
 
   // --- the surface, built once ---
-  let note, firstLead = true, root, card, kicker, progress, person, question, why, evidence, subject, answers, yesB, noB, laterB,
+  let note, firstLead = true, root, chip, chipFace, chipName, chipCount, closeB, card, kicker, progress, person, question, why, evidence, subject, answers, yesB, noB, laterB,
     follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume;
   function build() {
     root = el("section", "ask");
     root.setAttribute("aria-label", "Earshot needs you");
     card = el("div", "ask-card");
+    card.tabIndex = -1;
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", "Your decision");
     const top = el("div", "ask-top");
     kicker = el("p", "ask-kicker");
     progress = el("p", "ask-progress");
@@ -47,7 +50,7 @@ window.EarshotAsk = (() => {
     why = el("p", "ask-why");
     evidence = el("p", "ask-evidence");
     subject = el("div", "ask-letter");
-    note = el("p", "ask-note", "Yes sends this message. In this demo it goes to a test inbox, never to the person.");
+    note = el("p", "ask-note", "Goes to a test inbox, never to them.");
 
     answers = el("div", "ask-answers");
     yesB = button("ask-btn ask-yes", "Yes", "Y");
@@ -63,20 +66,20 @@ window.EarshotAsk = (() => {
     fixB.addEventListener("click", () => fix());
 
     follow = el("div", "ask-follow");
-    const fq = el("p", "ask-follow-q", "Why not? I will remember it as a rule.");
+    const fq = el("p", "ask-follow-q", "Why not? I'll keep it as a rule.");
     fq.id = "ask-why-q";
     chips = el("div", "ask-chips");
     chips.setAttribute("role", "group");
     chips.setAttribute("aria-labelledby", "ask-why-q");
     form = el("form", "ask-form");
     input = el("input", "ask-input");
-    Object.assign(input, {type: "text", maxLength: 500, autocomplete: "off", placeholder: "Or say why in your words"});
+    Object.assign(input, {type: "text", maxLength: 500, autocomplete: "off", placeholder: "Or in your words"});
     input.setAttribute("aria-label", "Why not, in your words");
     const send = button("ask-btn ask-send", "Send");
     send.type = "submit";
     form.append(input, send);
     form.addEventListener("submit", e => { e.preventDefault(); const t = input.value.trim(); if (t) reject(t); });
-    skipB = button("ask-link", "No reason, just skip them");
+    skipB = button("ask-link", "Just skip them");
     skipB.addEventListener("click", () => reject(""));
     follow.append(fq, chips, form, skipB);
 
@@ -85,6 +88,24 @@ window.EarshotAsk = (() => {
     card.append(top, person, question, why, evidence, subject, note, answers, follow, errorP);
 
     idle = el("p", "ask-idle", "Nothing needs you");
+    // Collapsed, the card is a chip in the corner; it opens in place into the panel.
+    chip = el("button", "ask-chip-pill");
+    chip.type = "button";
+    chip.setAttribute("aria-expanded", "false");
+    chipFace = el("span", "av");
+    chipName = el("span", "ask-chip-name");
+    const chipSub = el("span", "ask-chip-sub", "Your decision ↗");
+    chipCount = el("span", "ask-chip-count");
+    const chipText = el("span", "ask-chip-text");
+    chipText.append(chipName, chipSub);
+    chip.append(chipFace, chipText, chipCount);
+    chip.addEventListener("click", () => { if (!current) resume.click(); expand(true); });
+    closeB = el("button", "ask-close");
+    closeB.type = "button";
+    closeB.setAttribute("aria-label", "Close");
+    closeB.textContent = "×";
+    closeB.addEventListener("click", () => expand(false));
+    card.prepend(closeB);
     resume = el("button", "ask-resume");
     resume.type = "button";
     resume.addEventListener("click", () => {
@@ -96,11 +117,30 @@ window.EarshotAsk = (() => {
     });
     const bar = el("div", "ask-bar");
     bar.append(idle, resume);
-    root.append(card, bar);
+    root.append(chip, card, bar);
     document.body.appendChild(root);
 
     document.addEventListener("keydown", onKey);
     card.hidden = true;
+  }
+
+  function expand(open) {
+    root.classList.toggle("is-open", open);
+    chip.setAttribute("aria-expanded", String(open));
+    (open ? (current && current.yesno ? yesB : card) : chip).focus({preventScroll: true});
+  }
+  function paintChip(item) {
+    chipFace.replaceChildren();
+    if (item && item.kind === "lead") {
+      chipFace.append(el("span", "av-i", String(item.name).split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("")));
+      if (item.face) { const img = el("img"); Object.assign(img, {src: item.face, alt: "", width: 26, height: 26, loading: "lazy"}); img.onerror = () => img.remove(); chipFace.append(img); }
+    }
+    chipFace.hidden = !(item && item.kind === "lead");
+    chipName.textContent = item ? (item.kind === "lead" ? item.name : item.kicker) : later.length ? `${later.length} saved for later` : "";
+    const n = data ? pendingLeads().length : 0;
+    chipCount.textContent = n > 1 ? String(n) : "";
+    chipCount.hidden = n < 2;
+    root.dataset.empty = String(!item && !later.length);
   }
 
   // --- state ---
@@ -211,7 +251,7 @@ window.EarshotAsk = (() => {
     watch();
     if (current && !busy && !stillValid(current)) current = null;  // decided elsewhere, or parked while a run goes
     if (!current) show(next());
-    else if (current.kind === "lead") progress.textContent = progressText();
+    else if (current.kind === "lead") { progress.textContent = progressText(); paintChip(current); }
   }
 
   function showResume() {
@@ -236,7 +276,8 @@ window.EarshotAsk = (() => {
     card.classList.remove("is-in");
     const fill = () => {
       if (token !== swapToken) return;
-      if (!item) { card.hidden = true; root.dataset.state = "idle"; showResume(); if (hadFocus) resume.focus({preventScroll: true}); return; }
+      paintChip(item);
+      if (!item) { card.hidden = true; root.dataset.state = "idle"; root.classList.remove("is-open"); showResume(); paintChip(null); if (hadFocus) chip.focus({preventScroll: true}); return; }
       render(item);
       card.hidden = false;
       root.dataset.state = "open";
@@ -244,7 +285,7 @@ window.EarshotAsk = (() => {
       if (body) subject.classList.toggle("is-long", body.scrollHeight > body.clientHeight + 4);
       void card.offsetWidth;                      // commit the start state so the arrival animates
       card.classList.add("is-in");
-      if (hadFocus) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
+      if (hadFocus && root.classList.contains("is-open")) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
       if (item.kind === "lead" && actions.open) { try { actions.open(item.login); } catch { /* the card still works without the page behind it */ } }
       if (item.kind === "brief") { asked.add(item.key); briefTimer = setTimeout(() => { if (current === item) finish(); }, BRIEF_MS); }
       if (item.kind === "stop") asked.add(item.key);
@@ -264,7 +305,8 @@ window.EarshotAsk = (() => {
       person.append(av, el("span", "ask-name", item.name));
       if (item.company) person.append(el("span", "ask-co", item.company));
     }
-    question.textContent = item.q;
+    if (item.kind === "lead") question.replaceChildren("Write to ", el("em", "", item.name), "?");
+    else question.textContent = item.q;
     why.textContent = item.why || "";
     why.hidden = !item.why;
     evidence.replaceChildren();
@@ -365,9 +407,11 @@ window.EarshotAsk = (() => {
 
   function onKey(e) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !current) return;
-    if (!root || root.offsetParent === null) return;  // a key must never answer a question the founder cannot see
+    // A key must never answer a question the founder cannot see: collapsed chip, hidden screen, or no card.
+    if (!root || !root.classList.contains("is-open") || !card.getClientRects().length) return;
     const t = e.target;
     if (step === "why" && e.key === "Escape" && !busy) { e.preventDefault(); setStep("ask"); noB.focus({preventScroll: true}); return; }
+    if (e.key === "Escape") { e.preventDefault(); expand(false); return; }
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
     const k = e.key.toLowerCase();
     if (current.yesno && step === "ask" && (k === "y" || k === "n" || k === "l")) {

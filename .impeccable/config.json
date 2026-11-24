@@ -4,9 +4,15 @@
       "cream-palette"
     ],
     "ignoreFiles": [
-      "static/landing.html",
-      "demo/film/film.css"
+      "demo/film/film.css",
+      "static/landing.html"
     ],
-    "ignoreValues": []
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-11-24T22:05:47.498Z"
+      }
+    ]
   }
 }
