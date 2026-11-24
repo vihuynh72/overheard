@@ -66,7 +66,7 @@ function headline(p) {
 }
 // The buyer in at most six words, cut at a natural phrase; the phrase after the noun goes in italic.
 function buyer(role) {
-  let w = String(role || "").replace(/\s*\(.*?\)/g, "").split(/\s+(?:at|who|with|for|in)\s+|,|\//i)[0].trim().split(/\s+/).slice(0, 6);
+  let w = String(role || "").replace(/\s*\(.*?\)/g, "").replace(/(\w+)\/[\w-]+/g, "$1").split(/\s+(?:at|who|with|for|in)\s+|,/i)[0].trim().split(/\s+/).slice(0, 6);
   while (w.length > 2 && STOP.test(w.at(-1))) w.pop();
   const i = w.findIndex((x, k) => k > 0 && /ing$/i.test(x)), at = i > 0 ? i : Math.max(1, w.length - 1);
   return `${esc(cap(w.slice(0, at).join(" ")))} <em>${esc(w.slice(at).join(" "))}</em>`;

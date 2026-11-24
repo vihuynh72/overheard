@@ -166,7 +166,7 @@
     if (done) { segI = 0; segT = 0; arrived = false; done = false; select("site", {play: true}); funnel("site"); }
     setPlaying(true); dot.style.opacity = RM ? 0 : 1; last = performance.now(); requestAnimationFrame(tick);
   }
-  function stop() { if (!playing && done) return; done = true; setPlaying(false); dot.style.opacity = 0; extra = null; fN.textContent = 463; fT.textContent = "posts read"; }
+  function stop() { if (!playing && done) return; done = true; setPlaying(false); dot.style.opacity = 0; extra = null; fN.textContent = FUNNEL.trackers[0]; fT.textContent = "posts read"; }
   function tick(now) {
     if (!playing) return;
     if (segT === 0) { const [a0, b0] = SEQ[segI]; extra = a0 === "loop" ? "loop" : a0 + ">" + b0; paint(); }
@@ -200,8 +200,9 @@
   $$(".flow > li").forEach((el, i) => el.style.setProperty("--i", i));
   $$(".rows").forEach(ul => [...ul.children].forEach((el, i) => el.style.setProperty("--i", i)));
   const countUp = sec => $$(".logos .num, .r-t .num, .r-n .num", sec).forEach(el => {
-    const to = +el.textContent; if (!G || RM || !to) return;
-    const o = {v: 0}; G.to(o, {v: to, duration: 1.2, ease: "power2.out", onUpdate: () => el.textContent = Math.round(o.v)});
+    const to = +(el.dataset.to || el.textContent); if (!G || RM || !to) return;
+    if (el._tw) el._tw.kill();
+    const o = {v: 0}; el._tw = G.to(o, {v: to, duration: 1.2, ease: "power2.out", onUpdate: () => el.textContent = Math.round(o.v)});
   });
   let autoplayed = deep;
   const enter = sec => {
@@ -226,6 +227,66 @@
       .from(".hero .btn", {scale: 0.85, opacity: 0, duration: 0.8, ease: "power3.out"}, 1)
       .from(".hero .hint", {opacity: 0, duration: 0.6}, 1.2);
   }
+
+
+  // --- live numbers: swap today's hard-coded run for the server's latest finished run; any miss keeps the fallback ---
+  const vals = f => Array.isArray(f) ? f : (f && f.values) || [];
+  const STOP = /^(to|the|a|an|of|in|for|with|and|or|our|we|is|are|on|at|by|but)$/i, cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+  function buyer(role) {  // same cut as the app's buyer(): at most six words, the phrase after the noun in italic
+    let w = String(role || "").replace(/\s*\(.*?\)/g, "").replace(/(\w+)\/[\w-]+/g, "$1").split(/\s+(?:at|who|with|for|in)\s+|,/i)[0].trim().split(/\s+/).slice(0, 6);
+    while (w.length > 2 && STOP.test(w.at(-1))) w.pop();
+    const i = w.findIndex((x, k) => k > 0 && /ing$/i.test(x)), at = i > 0 ? i : Math.max(1, w.length - 1);
+    return [cap(w.slice(0, at).join(" ")), w.slice(at).join(" ")];
+  }
+  const setN = (el, n) => { if (el && Number.isFinite(n)) { el.dataset.to = n; el.textContent = n; } };
+  const setT = (el, t) => { if (el && t) el.textContent = t; };
+  function applyLive(d) {
+    const log = (d.status && d.status.log) || [], i = d.icp, leads = d.leads;
+    const lm = re => log.map(l => l.match(re)).find(Boolean) || null;
+    let site = ""; try { const u = lm(/^Planner: reading (\S+)/); site = u ? new URL(u[1]).hostname.replace(/^www\./, "") : ""; } catch (e) {}
+    const scan = lm(/(\d+) of (\d+) issues describe a target pain, from (\d+) people/), kept = lm(/(\d+) leads kept/), dropped = lm(/dropped (\d+) people whose issue/);
+    const trackers = lm(/watch (\d+) public issue trackers/);
+    const doms = vals(i.channels).map(c => c.domain).filter(Boolean);
+    const posts = scan ? +scan[2] : NaN, people = scan ? +scan[3] : NaN, keptN = kept ? +kept[1] : NaN, dropN = dropped ? +dropped[1] : NaN;
+    const msgs = leads.filter(l => l.draft_status !== "no_author").length, sites = doms.length;
+    const [role, rest] = buyer(vals(i.personas)[0]);
+    const sells = String(i.product || "").replace(/^[^:]{1,40}:\s*/, "").split(/\s+/).slice(0, 6).join(" ").replace(/[,;:.]$/, "");
+    const ok = Number.isFinite;
+    // map node details and the Play counter
+    if (site) { STEP.site[3] = site; $(".node[data-id=site] .nd-s").textContent = site; $(".sub", $("#how")).innerHTML = `Pick any step, or play today&rsquo;s run on ${site}.`; }
+    if (sites) STEP.planner[3] = `${sites} sites chosen to listen on`;
+    if (ok(posts)) {
+      STEP.trackers[3] = `${posts} public posts read across ${trackers ? trackers[1] : 3} trackers plus forum posts`; STEP.forums[3] = `Their posts are part of the ${posts} read`;
+      FUNNEL.trackers[0] = posts; if (done) fN.textContent = posts;
+    }
+    if (ok(people)) { STEP.match[3] = `${people} people found describing the problem`; FUNNEL.match[0] = people; }
+    if (ok(keptN)) FUNNEL.qualifier[0] = keptN;
+    if (ok(keptN) && ok(dropN)) STEP.qualifier[3] = `${dropN} dropped as not a fit; ${keptN} kept`;
+    STEP.writer[3] = `${msgs} messages written`; FUNNEL.writer[0] = msgs;
+    // the miniature
+    if (site) { $(".mini-bar").innerHTML = `Example: today&rsquo;s run on ${site}`; setT($("#mini-story .st:nth-child(1) .r-t em"), site); }
+    if (rest) $(".mini-line").innerHTML = `${role.replace(/[&<]/g, "")} <em>${rest.replace(/[&<]/g, "")}</em>`;
+    setN($(".logos .num"), people);
+    if (doms.length) $(".logo-row").replaceChildren(...doms.slice(0, 6).map(x => Object.assign(document.createElement("li"), {textContent: x.replace(/^(www|news)\./, "")})));
+    if (sites) setT($("#mini-story .st:nth-child(2) .r-t em"), `${sites} sites`);
+    setN($("#mini-story .st:nth-child(2) .r-n .num"), posts);
+    if (ok(people)) setT($("#mini-story .st:nth-child(3) .r-t em"), `${people} people`);
+    if (ok(keptN)) setT($("#mini-story .st:nth-child(4) .r-t em"), keptN);
+    if (ok(dropN)) { const t = $("#mini-story .st:nth-child(4) .r-n").firstChild; if (t && t.nodeType === 3) t.nodeValue = `${dropN} dropped as not a fit`; }
+    setT($("#mini-story .st:nth-child(5) .r-t em"), `${msgs} ${msgs === 1 ? "message" : "messages"}`);
+    if (sells) { const t = $("#mini-story .st:nth-child(1) .r-n").firstChild; if (t && t.nodeType === 3) t.nodeValue = cap(sells); }
+    // counters already played start again from zero towards the live figure; the rest read it when they first play
+    const ans = $("#answer.is-in"); if (ans) countUp(ans);
+    if (!tool) select(sel, {preview: true});
+  }
+  (async () => {
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 4000);
+    try {
+      const r = await fetch("/api/state", {signal: ac.signal}); if (!r.ok) return;
+      const d = await r.json();
+      if (d && d.icp && d.leads && d.leads.length && d.status && d.status.running === false) applyLive(d);
+    } catch (e) { /* offline or slow: the hard-coded run stays */ } finally { clearTimeout(t); }
+  })();
 
   // Scroll position as a hairline under the nav.
   const bar = $(".nav-progress"); let queued = false;
