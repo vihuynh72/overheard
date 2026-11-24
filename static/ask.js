@@ -35,7 +35,7 @@ window.EarshotAsk = (() => {
   const dur = () => reduced.matches ? 0 : 240;
 
   // --- the surface, built once ---
-  let root, card, kicker, progress, toggle, question, why, evidence, subject, answers, yesB, noB, laterB,
+  let note, firstLead = true, root, card, kicker, progress, toggle, question, why, evidence, subject, answers, yesB, noB, laterB,
     follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume;
   function build() {
     root = el("section", "ask");
@@ -54,7 +54,8 @@ window.EarshotAsk = (() => {
     question.setAttribute("aria-live", "polite");
     why = el("p", "ask-why");
     evidence = el("p", "ask-evidence");
-    subject = el("p", "ask-subject");
+    subject = el("details", "ask-read");
+    note = el("p", "ask-note", "Yes sends this message. In this demo it goes to a test inbox, never to the person.");
 
     answers = el("div", "ask-answers");
     yesB = button("ask-btn ask-yes", "Yes", "Y");
@@ -89,7 +90,7 @@ window.EarshotAsk = (() => {
 
     errorP = el("p", "ask-error");
     errorP.setAttribute("role", "alert");
-    card.append(top, question, why, evidence, subject, answers, follow, errorP);
+    card.append(top, question, why, evidence, subject, note, answers, follow, errorP);
 
     idle = el("p", "ask-idle", "Nothing needs you");
     resume = el("button", "ask-resume");
@@ -137,11 +138,11 @@ window.EarshotAsk = (() => {
     const whenText = when && !isNaN(when) ? when.toLocaleDateString(undefined, {month: "short", year: "numeric"}) : "";
     return {
       key: "lead:" + l.login, kind: "lead", login: l.login, yesno: true,
-      kicker: "Needs you",
+      kicker: "Your decision",
       q: `Write to ${name}${company ? " at " + company : ""}?`,
       why: sentence(l.reason),
       evidence: sig ? [sig.title, [sig.repo, whenText].filter(Boolean).join(", ")] : null,
-      subject: l.subject || "",
+      subject: l.subject || "", body: l.body || "",
       reasons: reasonsFor(l, company),
     };
   }
@@ -273,8 +274,15 @@ window.EarshotAsk = (() => {
       if (item.evidence[1]) evidence.append(el("span", "ask-where", item.evidence[1]));
     }
     subject.replaceChildren();
+    subject.open = false;
     subject.hidden = !item.subject;
-    if (item.subject) subject.append(el("span", "ask-label", "Draft"), el("span", "ask-subject-text", item.subject));
+    if (item.subject) {
+      const msg = el("div", "ask-read-body");
+      msg.append(el("strong", "", item.subject), document.createTextNode(item.body || ""));
+      subject.append(el("summary", "", "Read the message"), msg);
+    }
+    note.hidden = !(item.kind === "lead" && firstLead);
+    if (item.kind === "lead") firstLead = false;
     yesB.hidden = noB.hidden = laterB.hidden = !item.yesno;
     yesB.querySelector(".ask-btn-label").textContent = item.kind === "lead" ? "Yes, send it" : "Yes";
     fixB.hidden = !item.fix;

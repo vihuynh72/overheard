@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Earshot · outbound that starts from what people wrote</title>
-<meta name="description" content="Earshot reads public GitHub issues, forums and review sites, keeps the people describing a pain you solve, and drafts a message you approve.">
+<meta name="description" content="Paste your website. Earshot names your customer, finds the people who described that exact problem in public, shows you what they wrote, and drafts a message you approve.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/landing.css">
 <script src="/static/landing.js" defer></script>
 </head>
@@ -18,144 +18,141 @@
   <nav class="nav" aria-label="Primary">
     <a class="wordmark" href="#top">Earshot</a>
     <ul class="nav-links">
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#run">One run</a></li>
+      <li><a href="#answer">The answer</a></li>
+      <li><a href="#line">The line</a></li>
       <li><a href="#limits">Limits</a></li>
     </ul>
-    <a class="btn btn-small" href="/app">Open the workbench</a>
+    <a class="btn btn-small" href="/app">Find my customers</a>
   </nav>
 </header>
 
 <main id="main">
   <section class="hero" id="top" aria-labelledby="hero-title">
-    <h1 id="hero-title">Find the people already naming your problem</h1>
-    <div class="hero-body">
-      <p class="lead">A line of agents reads the public issue trackers of your product and its open-source competitors, plus the forums and review sites where buyers complain. It keeps the people whose own words describe a pain you solve, shows you what they wrote, and drafts a message that waits for your approval.</p>
-      <div class="hero-actions">
-        <a class="btn" href="/app">Open the workbench</a>
-        <a class="text-link" href="#how">See how it works</a>
+    <div class="hero-copy">
+      <h1 id="hero-title">Find the people already naming your&nbsp;problem.</h1>
+      <div class="hero-side">
+        <p class="lead">A line of agents names your customer, listens in issue trackers, forums and review sites for people describing that exact problem, and shows you what each one wrote before anything is drafted.</p>
+        <div class="hero-act">
+          <a class="btn" href="/app">Find my customers</a>
+          <p class="quiet">Paste your website. About two minutes.</p>
+        </div>
       </div>
-      <p class="fine">Nothing is sent without your approval. In this demo, approved mail goes through Resend to a test inbox, never to the person.</p>
-      <p class="live" hidden><span class="live-dot" aria-hidden="true"></span><span class="live-label">Live from the workbench</span><span class="live-text"></span></p>
     </div>
+
+    <div class="field" aria-hidden="true">
+      <div class="track">
+        <span>Webhook retries fire twice after a timeout</span><span>Docs for the self-hosted install are out of date</span><span class="said" data-i="0">No invoice is generated for billing periods where the charge is $0</span><span>Dark mode toggle resets on reload</span><span>Support arm64 images</span>
+      </div>
+      <div class="track">
+        <span>Migration fails on Postgres 16</span><span>Add CSV export for customers list</span><span>Rate limiter ignores the per-key setting</span><span class="said" data-i="1">Coupon and discount amounts don't carry over to the Stripe invoice line items</span><span>Typo in the README</span>
+      </div>
+      <div class="track">
+        <span>Helm chart missing resource limits</span><span class="said" data-i="2">Need quota-based billing with a webhook when the quota is reached</span><span>Login page flashes before redirect</span><span>Timezone wrong on usage graphs</span><span>Bump the SDK version</span>
+      </div>
+      <div class="track">
+        <span>CLI prints a stack trace on bad config</span><span>Search does not match partial words</span><span>Allow SSO with Okta</span><span>Pagination skips the last page</span><span>Clarify the license for plugins</span>
+      </div>
+    </div>
+
+    <aside class="heard" aria-labelledby="heard-title">
+      <h2 id="heard-title" class="label">Heard on flexprice.io, today</h2>
+      <ol class="heard-list">
+        <li>No invoice is generated for billing periods where the charge is $0</li>
+        <li>Coupon and discount amounts don't carry over to the Stripe invoice line items</li>
+        <li>Need quota-based billing with a webhook when the quota is reached</li>
+      </ol>
+      <p class="heard-note">Three phrasings it learned from real public posts. The rest of this field is illustration.</p>
+    </aside>
   </section>
 
-  <section class="specimen" aria-labelledby="specimen-title">
-    <div class="specimen-intro">
-      <h2 id="specimen-title">Every lead comes with its evidence</h2>
-      <p>This is one match from a real run, with the name left out. In the workbench each one links to the public issue the person wrote.</p>
-    </div>
-    <figure class="evidence">
-      <dl>
-        <div class="ev-row">
-          <dt>Issue</dt>
-          <dd class="ev-title">[BUG]: Invoice not being generated when cost is 0</dd>
-        </div>
-        <div class="ev-row">
-          <dt>Where</dt>
-          <dd><span class="mono">getlago/lago</span> · <time class="mono" datetime="2026-02-26">2026-02-26</time></dd>
-        </div>
-        <div class="ev-row">
-          <dt>Matched pain</dt>
-          <dd><blockquote class="pain">“We built our own usage metering and billing in-house and it keeps breaking, double counting events and producing wrong invoices.”</blockquote></dd>
-        </div>
-        <div class="ev-row">
-          <dt>Match</dt>
-          <dd><span class="mono score">0.61</span></dd>
-        </div>
+  <section class="answer" id="answer" aria-labelledby="answer-title">
+    <div class="answer-head">
+      <h2 id="answer-title">The answer, on one screen</h2>
+      <p>From one real run on flexprice.io, open-source usage billing. These are that run's numbers, not a promise about the next.</p>
+      <dl class="tally">
+        <div><dt>public issues read, across 3 trackers</dt><dd class="mono">463</dd></div>
+        <div><dt>forum posts read</dt><dd class="mono">7</dd></div>
+        <div><dt>people describing a target pain</dt><dd class="mono">39</dd></div>
+        <div><dt>kept as leads</dt><dd class="mono">6</dd></div>
       </dl>
-      <figcaption>The issue was matched to the pain by meaning, not by shared keywords. The score is how close the two read.</figcaption>
+    </div>
+
+    <figure class="mini">
+      <div class="mini-bar" aria-hidden="true"><b class="mono">Earshot, home screen</b></div>
+      <p class="mini-who">Your customer: backend engineers building billing at AI-native SaaS companies, launching or migrating to usage-based or credit-based pricing.</p>
+      <div class="mini-cols">
+        <div>
+          <h3 class="label">What hurts</h3>
+          <ul>
+            <li>Stripe metered billing doesn't support our credit-based pricing and…</li>
+            <li>Our home-grown usage billing system keeps producing invoice mismatches…</li>
+            <li>How do I meter LLM tokens per customer in…</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="label">Where they talk</h3>
+          <ul class="mono">
+            <li>github.com</li>
+            <li>news.ycombinator.com</li>
+            <li>reddit.com</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="label">How they say it</h3>
+          <ul class="quotes">
+            <li>“Coupon and discount amounts don't carry over to the Stripe invoice line items”</li>
+            <li>“No invoice is generated for billing periods where the charge is $0”</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mini-people">
+        <h3 class="label">People who said it</h3>
+        <p><span class="mono">getlago/lago</span> [BUG]: Invoice not being generated when cost is 0</p>
+        <p><span class="mono">getlago/lago</span> [FEAT]: invoice approvals</p>
+      </div>
+      <figcaption>A redrawing of the home screen with that run's content. Names are left out here; in the product each person links to the post they wrote.</figcaption>
     </figure>
   </section>
 
-  <section class="why" aria-labelledby="why-title">
-    <h2 id="why-title">The reason to write is already on the page</h2>
-    <div class="contrast">
-      <div class="contrast-item">
-        <h3>The usual way</h3>
-        <p>Most outbound tools start from a list of companies and guess at relevance. The message has to invent a reason the reader should care.</p>
-      </div>
-      <div class="contrast-item is-ours">
-        <h3>This way</h3>
-        <p>Earshot starts from a person’s own words about the problem. You write back to something they said, and you can show them where they said it.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="how" id="how" aria-labelledby="how-title">
-    <div class="how-head">
-      <h2 id="how-title">How it works</h2>
-      <p>Four steps, in the order they run. The last one is always yours.</p>
-    </div>
-    <ol class="steps">
-      <li class="step">
-        <span class="step-num mono">01</span>
-        <h3>Describe the product</h3>
-        <p>Write one paragraph in plain words: what it does and who it is for. You do not bring a list of target companies.</p>
-      </li>
-      <li class="step">
-        <span class="step-num mono">02</span>
-        <h3>Earshot infers who it is for</h3>
-        <p>From that paragraph it infers a customer profile and five pain statements, written the way a frustrated engineer would put them in an issue.</p>
-      </li>
-      <li class="step">
-        <span class="step-num mono">03</span>
-        <h3>It searches by meaning</h3>
-        <p>It searches public issues, forums and review sites for those pains by meaning rather than by keyword, and keeps the person who wrote each one, with a link to what they wrote.</p>
-      </li>
-      <li class="step">
-        <span class="step-num mono">04</span>
-        <h3>You decide, until it has earned the right</h3>
-        <p>You read the evidence beside each draft, then approve, edit or reject it. Each decision is checked against what the agents would have done; once they match you on nine in ten, you can let them send on their own, and they step back down after a mistake.</p>
-      </li>
+  <section class="line" id="line" aria-labelledby="line-title">
+    <h2 id="line-title">Seven agents, one line. Each hands the next something it can check.</h2>
+    <ol class="agents">
+      <li><span class="creature" data-seed="planner"></span><h3>Planner</h3><p>Reads your site. Hands on a customer, the pains they have, and where they talk.</p></li>
+      <li><span class="creature" data-seed="scout"></span><h3>Scout</h3><p>Listens there. Hands on posts that describe a pain, each with its link.</p></li>
+      <li><span class="creature" data-seed="qualifier"></span><h3>Qualifier</h3><p>Weighs each post. Hands on the few people worth writing to, and why.</p></li>
+      <li><span class="creature" data-seed="enricher"></span><h3>Enricher</h3><p>Looks for a way to reach them. Hands on a checked address, or says there is none.</p></li>
+      <li><span class="creature" data-seed="writer"></span><h3>Writer</h3><p>Drafts from the person's own words. Hands on a message that quotes what they said.</p></li>
+      <li><span class="creature" data-seed="reviewer"></span><h3>Reviewer</h3><p>A second model checks every claim against the evidence. Hands on a clean draft, or holds it.</p></li>
+      <li><span class="creature" data-seed="sender"></span><h3>Sender</h3><p>Releases only what you approved, and only when every gate passes.</p></li>
     </ol>
   </section>
 
-  <section class="run" id="run" aria-labelledby="run-title">
-    <div class="run-head">
-      <h2 id="run-title">One run, on Flexprice</h2>
-      <p>Flexprice is open-source usage billing. Today Earshot read its tracker and those of two open-source competitors. These are the numbers from that one run, not a claim about the next.</p>
-      <ul class="repos mono" aria-label="Repositories read">
-        <li>flexprice/flexprice</li>
-        <li>getlago/lago</li>
-        <li>openmeterio/openmeter</li>
-      </ul>
+  <section class="ask" aria-labelledby="ask-title">
+    <div class="ask-copy">
+      <h2 id="ask-title">You give a goal, not labour.</h2>
+      <p>The machine asks one question at a time, and only the ones it cannot settle itself. Every question shows the evidence beside it.</p>
+      <p>Autonomy is earned. The agents act alone only where their past judgments matched yours and their own checks are clean. One release you would have stopped ends autopilot.</p>
     </div>
-    <ol class="ledger">
-      <li style="--share: 1">
-        <span class="ledger-n mono">463</span>
-        <span class="ledger-what">public issues read across three repositories</span>
-        <span class="ledger-bar" aria-hidden="true"></span>
-      </li>
-      <li style="--share: 0.149">
-        <span class="ledger-n mono">69</span>
-        <span class="ledger-what">described one of the five target pains</span>
-        <span class="ledger-bar" aria-hidden="true"></span>
-      </li>
-      <li style="--share: 0.0886">
-        <span class="ledger-n mono">41</span>
-        <span class="ledger-what">people wrote those issues</span>
-        <span class="ledger-bar" aria-hidden="true"></span>
-      </li>
-      <li style="--share: 0.054">
-        <span class="ledger-n mono">25</span>
-        <span class="ledger-what">top leads were scored and drafted</span>
-        <span class="ledger-bar" aria-hidden="true"></span>
-      </li>
-    </ol>
+    <figure class="question" aria-label="A question as Earshot asks it">
+      <p class="label">Needs you <span class="mono">1 of 6</span></p>
+      <p class="q">Write to this person?</p>
+      <p class="q-said"><span class="label">They wrote</span> [BUG]: Invoice not being generated when cost is 0 <span class="mono">getlago/lago</span></p>
+      <div class="q-actions" aria-hidden="true"><span class="q-yes">Yes, send it</span><span>No</span><span>Later</span></div>
+    </figure>
   </section>
 
   <section class="limits" id="limits" aria-labelledby="limits-title">
-    <h2 id="limits-title">What it cannot do</h2>
-    <div class="limits-body">
-      <p>It only hears people who write in public, mostly in issue trackers. A run gives you dozens of leads, not thousands, and each one is worth reading.</p>
-      <p>Most people in a tracker list no company, so only some leads get a business email. When one is found it is checked with Hunter and labelled with the result.</p>
-    </div>
+    <h2 id="limits-title">What it will not do</h2>
+    <ol class="nots">
+      <li><p class="not">Pretend it can find your buyers when they do not write in public.</p><p class="why">It checks fit at intake and declines the product instead of padding a list.</p></li>
+      <li><p class="not">Email a lead. Not in this build.</p><p class="why">Approved mail goes to a demo inbox. The code has no path that addresses a lead.</p></li>
+      <li><p class="not">Send a claim the evidence does not show.</p><p class="why">The Reviewer holds the draft and says why.</p></li>
+    </ol>
   </section>
 
   <section class="close" aria-labelledby="close-title">
-    <h2 id="close-title">Read what they wrote, then decide whether to write back</h2>
-    <a class="btn" href="/app">Open the workbench</a>
+    <h2 id="close-title">Read what they wrote. Then decide whether to write back.</h2>
+    <a class="btn" href="/app">Find my customers</a>
   </section>
 </main>
 

@@ -6,10 +6,10 @@ const EXT = `<svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentCo
 const who = a => a === "rep" ? "you" : a;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // Home is "floor"; every other name is a section that opens over it.
-const SECTIONS = {leads: "People", map: "Map", profile: "Buyer", proof: "Proof", activity: "Activity"};
+const SECTIONS = {leads: "People", map: "Map", profile: "Customer", proof: "Proof", activity: "Activity"};
 const EMAIL = {valid: "verified", accept_all: "domain accepts all mail", invalid: "failed verification", webmail: "personal webmail", disposable: "disposable address", unknown: "unverified", pending: "verifying"};
 
-const ui = {data: null, json: "", selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", manual: false, error: "", detailKey: "", shown: "", open: {},
+const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", manual: false, error: "", detailKey: "", shown: "", open: {},
   profileEl: Object.assign(document.createElement("div"), {id: "mount-profile"}),
   mapEl: Object.assign(document.createElement("div"), {id: "mount-map"}),
   proofEl: Object.assign(document.createElement("div"), {id: "mount-proof"})};
@@ -42,14 +42,16 @@ function homeLine() {
   const needs = (floor.inbox || []).length;
   return [`Found ${plural(leads.length, "person", "people")} describing your problem.`,
     pending ? `${pending} ${pending === 1 ? "draft is" : "drafts are"} ready.` : `${written} written to.`,
-    needs ? `${needs} ${needs === 1 ? "needs" : "need"} you.` : "Nothing needs you."].join(" ");
+    needs ? `${needs} ${needs === 1 ? "needs" : "need"} your decision.` : "Nothing needs you."].join(" ");
 }
 
 function homeStrip() {
   const {floor, billing} = ui.data, gates = floor.trust?.gates || [];
-  return `<span class="strip-say">${esc(ui.data.status.running ? "Running" : homeLine())}</span><a href="#proof"><span class="k">Autonomy</span> ${esc(floor.trust?.level || "unknown")}</a>
-    <a href="#proof"><span class="k">Gates</span> <span class="num">${gates.filter(g => g.passed).length} of ${gates.length}</span></a>
-    <a href="#activity"><span class="k">Credits</span> <span class="num">${billing.credits.toFixed(1)}</span></a>`;
+  const level = floor.trust?.level === "autopilot" ? "Earshot sends on its own" : "You approve every message";
+  return `<span class="strip-say">${esc(ui.data.status.running ? "Running" : homeLine())}</span><a href="#proof">${level}</a>
+    <a href="#proof">Trust checks <span class="num">${gates.filter(g => g.passed).length} of ${gates.length}</span> passed</a>
+    <a href="#activity"><span class="num">${Math.floor(billing.credits)}</span> credits left</a>
+    <button type="button" class="linkish" data-restart>Try another website</button>`;
 }
 
 // --- who the customer is, from the inferred profile and the people who proved it ---
@@ -75,50 +77,124 @@ function customerFacts(icp, leads) {
   const say = icp.learned_pains?.length ? icp.learned_pains.slice(0, 2) : top.slice(0, 1).flatMap(l => l.signals.slice(0, 1).map(s => s.title));
   const fact = (k, items) => `<div class="fact"><h2>${k}</h2><ul>${items || `<li class="muted">Not known yet</li>`}</ul></div>`;
   return `<div class="facts-row">
-    ${fact("What hurts", pains.map(([p, n]) => `<li>${esc(words(p, 9))}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
-    ${fact("Where they talk", where.map(([d, n]) => `<li>${esc(d)}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
-    ${fact("How they say it", say.map(t => `<li class="quote">“${esc(words(t, 14))}”</li>`).join(""))}
+    ${fact("What they struggle with", pains.map(([p, n]) => `<li>${esc(words(p, 9))}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
+    ${fact("Where they write", where.map(([d, n]) => `<li>${esc(d)}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
+    ${fact("In their own words", say.map(t => `<li class="quote">“${esc(words(t, 14))}”</li>`).join(""))}
   </div>`;
 }
 
-function proofPeople(leads) {
+// In the example every row is inert: nothing in it belongs to this founder.
+function proofPeople(leads, example) {
   if (!leads.length) return "";
   const top = [...leads].sort((a, b) => b.score - a.score).slice(0, 3);
   return `<section class="said" aria-labelledby="said-h"><h2 id="said-h">People who said it</h2><ul>
-    ${top.map(l => { const s = l.signals[0] || {}; return `<li><button type="button" class="said-who" data-open="${esc(l.login)}" data-go-leads>${esc(nameOf(l))}</button>
-      <span class="muted">${esc(l.company || "")}</span>
-      <a class="said-words" href="${safeUrl(s.url)}" target="_blank" rel="noopener">“${esc(words(s.title || l.reason, 12))}”${EXT}</a></li>`; }).join("")}
-    </ul><a class="see-all" href="#leads">See all ${leads.length}</a></section>`;
+    ${top.map(l => { const s = l.signals[0] || {}, inner = `<span class="said-who">${esc(nameOf(l))}</span>
+      <span class="muted">${esc(l.company || "")}</span><span class="said-words">“${esc(words(s.title || l.reason, 12))}”</span>`;
+      return `<li>${example ? `<span class="said-row">${inner}</span>` : `<button type="button" class="said-row" data-open="${esc(l.login)}" data-go-leads>${inner}</button>`}
+      <a class="said-src" href="${safeUrl(s.url)}" target="_blank" rel="noopener" aria-label="Open what ${esc(nameOf(l))} wrote">${EXT}</a></li>`; }).join("")}
+    </ul>${example ? "" : `<a class="see-all" href="#leads">See all ${leads.length}</a>`}</section>`;
 }
 
-function homeCustomer() {
-  const {icp, leads, status} = ui.data;
-  const head = status.running ? (status.log.at(-1) || "Starting.") : status.error ? `The last run stopped: ${status.error}` : customerLine(icp || {});
-  return `<h1 class="home-line" id="home-line" data-running="${!!status.running}">${esc(head)}</h1>
-    ${icp ? customerFacts(icp, leads) : ""}${proofPeople(leads)}`;
+const COACH = "earshot.coach.seen";
+const seen = () => { try { return localStorage.getItem(COACH) === "1"; } catch (e) { return true; } };
+
+function homeCustomer(d, example) {
+  const {icp, leads, status} = d;
+  const head = status.error ? `The last run stopped: ${status.error}` : customerLine(icp || {});
+  const coach = example || seen() ? "" : `<p class="coach" id="coach">This is who Earshot thinks your customer is, based on what real people wrote. Each name links to their post. Answer the questions in the card when you're ready.
+    <button type="button" class="linkish" data-coach-done>Got it</button></p>`;
+  const banner = example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours yet, and nothing is sent.</span><button type="button" class="btn" data-example-off>Use my own website</button></p>` : "";
+  return `${banner}${coach}<h1 class="home-line" id="home-line">${esc(head)}</h1>
+    ${icp ? customerFacts(icp, leads) : ""}${proofPeople(leads, example)}`;
 }
 
+// Moment 1: one promise, one field, and what will happen next.
 function intakeForm() {
-  const busy = ui.data.status.running;
+  const back = ui.data.leads.length ? `<button type="button" class="linkish" data-restart-off>Back to your results</button>` : `<button type="button" class="linkish" data-example>See an example first</button>`;
   return `<form class="intake" id="intake" novalidate>
-    <h1><label for="target">Your website or GitHub repository</label></h1>
-    <div class="intake-row"><input type="text" id="target" placeholder="flexprice.io" maxlength="200" autocomplete="url" value="${esc(ui.target)}">
-      <button class="btn" ${busy ? "disabled" : ""}>${busy ? "Working…" : "Find leads"}</button></div>
-    ${ui.error ? `<p class="error" role="alert">${esc(ui.error)}</p>` : ""}
+    <h1>Who is your customer?</h1>
+    <p class="intake-lede">Paste your website. Earshot reads it, finds people who have described the problem you solve, and shows you who they are.</p>
+    <label for="target">Your website</label>
+    <div class="intake-row"><input type="text" id="target" placeholder="yourcompany.com" maxlength="200" autocomplete="url" inputmode="url" value="${esc(ui.target)}"
+      ${ui.error ? `aria-invalid="true" aria-describedby="intake-err"` : ""}>
+      <button class="btn">Find my customers</button></div>
+    ${ui.error ? `<p class="error" id="intake-err" role="alert">${esc(ui.error)}</p>` : ""}
+    <p class="hint">About two minutes. You don't need to do anything else.</p>
+    <ol class="intake-steps">
+      <li>Earshot reads your site to learn what you sell.</li>
+      <li>It listens where your buyers write: GitHub, forums, review sites.</li>
+      <li>It shows you who they are, with a message ready for each. You say yes or no.</li>
+    </ol>
+    ${back}
   </form>`;
 }
 
+// Moment 2: the run's log, translated into five steps a founder recognises.
+const strip = l => l.replace(/^[A-Z][a-z]+( → [A-Z][a-z]+)?:\s*/, "");
+const RUN = [
+  {name: "Reading your website", done: /^Planner: inferring/},
+  {name: "Working out who your customer is", done: /^Planner → Scout/},
+  {name: "Listening where they write", done: /^Scout → Qualifier/,
+    result: log => { const m = log.map(l => l.match(/(\d+) of (\d+) issues .* from (\d+) people/)).find(Boolean); return m && `${m[2]} posts read, ${m[3]} people found`; }},
+  {name: "Checking each person really has this problem", done: /^(Enricher → Writer|Writer →)/,
+    result: log => { const m = log.map(l => l.match(/^Enricher → Writer: (\d+) leads kept/)).find(Boolean); return m && `${plural(+m[1], "person", "people")} kept`; }},
+  {name: "Writing a message to each from their own words", done: /^Done:/,
+    result: log => { const m = log.map(l => l.match(/(\d+) messages drafted/)).find(Boolean); return m && plural(+m[1], "message", "messages") + " written"; }},
+];
+function runView() {
+  const log = ui.data.status.log || [];
+  const doneAt = RUN.map(s => log.findIndex(l => s.done.test(l)));
+  const cur = doneAt.findIndex(i => i < 0);
+  const sites = (log.find(l => /listening on /.test(l)) || "").split("listening on ")[1];
+  return `<div class="run" aria-live="polite"><h1>Finding your customers${ui.target ? ` on <span class="run-site">${esc(hostOf(/^https?:/.test(ui.target) ? ui.target : "https://" + ui.target) || ui.target)}</span>` : ""}</h1>
+    <ol class="checklist">${RUN.map((s, i) => {
+      const state = doneAt[i] >= 0 ? "done" : i === cur ? "now" : "next";
+      const note = state === "done" ? s.result?.(log) : state === "now" ? (i === 2 && sites ? `Listening on ${sites}` : strip(log.at(-1) || "Starting.")) : "";
+      return `<li data-state="${state}"${state === "now" ? ` aria-current="step"` : ""}><span class="check" aria-hidden="true"></span><span class="check-name">${s.name}<span class="visually-hidden">${state === "done" ? ", done" : state === "now" ? ", in progress" : ""}</span></span>${note ? `<span class="check-note">${esc(note)}</span>` : ""}</li>`;
+    }).join("")}</ol>
+    <p class="hint">This takes about two minutes. You can leave this tab open.</p></div>`;
+}
+function failedView() {
+  const err = String(ui.data.status.error || "").replace(/^[A-Za-z]+Error:\s*/, "");
+  const decline = /not a fit/i.test(err);
+  return `<div class="run" role="alert"><h1>${decline ? "Earshot is the wrong tool for this product" : "That run stopped before it finished"}</h1>
+    <p class="intake-lede">${decline ? `We would rather tell you now than send you the wrong people. ${esc(err.replace(/^Earshot is not a fit for this product:\s*/i, "The reason: "))}` : esc(err)}</p>
+    <div class="actions"><button type="button" class="btn" data-restart>${decline ? "Try another website" : "Try again"}</button></div></div>`;
+}
+
+function homeMode() {
+  const {leads, status} = ui.data;
+  if (status.running) return "running";
+  if (ui.example) return "example";
+  if (ui.restart) return "fresh";
+  if (!leads.length) return status.error ? "failed" : "fresh";
+  return "home";
+}
+
 function renderHome() {
-  const fresh = !ui.data.leads.length && !ui.data.status.running;
-  document.body.classList.toggle("is-fresh", fresh);
-  const slot = $("home-top");
-  if (fresh) {
+  const mode = homeMode(), slot = $("home-top");
+  document.body.classList.toggle("is-fresh", mode !== "home");
+  document.body.dataset.mode = mode;
+  if (mode === "fresh") {
     // Rebuild the form only when it is not being typed in.
     if (!slot.querySelector("#intake") || !slot.contains(document.activeElement)) slot.innerHTML = intakeForm();
-  } else slot.innerHTML = homeCustomer();
-  $("home-strip").innerHTML = fresh ? "" : homeStrip();
+  } else slot.innerHTML = mode === "running" ? runView() : mode === "failed" ? failedView() : homeCustomer(mode === "example" ? SAMPLE : ui.data, mode === "example");
+  $("home-strip").innerHTML = mode === "home" ? homeStrip() : "";
   EarshotHabitat.render($("mount-habitat"), ui.data.floor);
 }
+
+// A fixed picture of a finished Flexprice run, shown before anything is run. Links search the real trackers; nothing is invented about the people beyond their public titles.
+const issueSearch = (repo, q) => `https://github.com/${repo}/issues?q=${encodeURIComponent(q)}`;
+const SAMPLE = {status: {running: false, log: []},
+  icp: {personas: ["Backend engineers building billing"], industries: ["AI-native SaaS"], triggers: ["launching or migrating to usage-based or credit-based pricing"],
+    pains: ["Stripe metered billing doesn't support our credit-based pricing", "Our home-grown usage billing keeps producing invoice mismatches", "How do I meter LLM tokens per customer"],
+    channels: [{domain: "github.com"}, {domain: "news.ycombinator.com"}, {domain: "reddit.com"}],
+    learned_pains: ["No invoice is generated for billing periods where the charge is $0", "Coupon discounts don't carry over to the Stripe invoice lines"]},
+  leads: [
+    {login: "deef", name: "deef", company: "", score: 3, signals: [{title: "[BUG]: Invoice not being generated when cost is 0", url: issueSearch("getlago/lago", "Invoice not being generated when cost is 0"), repo: "getlago/lago"}]},
+    {login: "superphao4", name: "superphao4", company: "", score: 2, reason: "Opened billing issues on getlago/lago", signals: [{title: "", url: issueSearch("getlago/lago", "author:superphao4"), repo: "getlago/lago"}]},
+    {login: "derekperkins", name: "Derek Perkins", company: "Nozzle", score: 1, signals: [{title: "[FEAT]: invoice approvals", url: issueSearch("getlago/lago", "invoice approvals"), repo: "getlago/lago"}]},
+  ]};
 
 // --- sections ------------------------------------------------------------------------
 
@@ -263,8 +339,9 @@ document.addEventListener("submit", async e => {
   const typed = e.target.id === "intake-manual", target = ui.target.trim();
   try {
     if (typed && ui.desc.trim().length < 20) throw new Error("Describe it in at least 20 characters.");
-    if (!typed && !target) throw new Error("Enter your website or GitHub repository.");
+    if (!typed && !target) throw new Error("Type your website address first, for example yourcompany.com.");
     await api("/api/run", typed ? {description: ui.desc, product_repo: ui.repo.trim()} : {target});
+    ui.restart = ui.example = false;
     location.hash = "floor";
   } catch (err) { ui.error = err.message; }
   if (e.target.id === "intake") $("home-top").innerHTML = "";  // let the next render show the error or the line
@@ -274,6 +351,12 @@ document.addEventListener("click", async e => {
   const nav = e.target.closest(".tabs [data-view]");
   if (nav) { if (nav.dataset.view === "leads") { ui.selected = null; if (view() === "leads") renderPanel(); } location.hash = nav.dataset.view; return; }
   if (e.target.closest("[data-close]")) { location.hash = "floor"; return; }
+  const flip = (k, v) => { ui[k] = v; ui.error = ""; $("home-top").innerHTML = ""; location.hash = "floor"; renderHome(); };
+  if (e.target.closest("[data-example]")) return flip("example", true);
+  if (e.target.closest("[data-example-off]")) { flip("example", false); return $("target")?.focus(); }
+  if (e.target.closest("[data-restart]")) { flip("restart", true); return $("target")?.focus(); }
+  if (e.target.closest("[data-restart-off]")) return flip("restart", false);
+  if (e.target.closest("[data-coach-done]")) { try { localStorage.setItem(COACH, "1"); } catch (err) { /* shown again next visit */ } $("coach")?.remove(); return; }
   if (e.target.closest("[data-back]")) { ui.selected = null; ui.rejecting = false; renderPanel(); return; }
   const open = e.target.closest("[data-open]"), act = e.target.closest("[data-act]"), tf = e.target.closest("[data-tier-filter]");
   if (tf) { ui.tier = tf.dataset.tierFilter; renderPanel(); }
