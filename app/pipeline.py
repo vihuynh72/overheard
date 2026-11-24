@@ -303,6 +303,15 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains)
     if scout_web.last["failed"]:
         say(f"Scout: {scout_web.last['failed']} of {scout_web.last['queries']} web searches failed; those sources were not heard")
+    src = scout_web.sources.last
+    if hn_found := sum(1 for v in voices if v["repo"] == "news.ycombinator.com" and v.get("profile")):
+        say(f"Scout: {hn_found} Hacker News posts, each with its author and date")
+    if src["hn_failed"]:
+        say(f"Scout: {src['hn_failed']} of {src['hn_requests']} Hacker News searches failed; those were not heard")
+    if src["reddit_ok"]:
+        say(f"Scout: read the author and date of {src['reddit_ok']} Reddit posts from Reddit itself")
+    if src["reddit_blocked"]:
+        say("Scout: Reddit refused a request, so the remaining Reddit posts keep no named author")
     sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
     kept = scout_web.drop_sellers(voices, sellers)
     if len(kept) < len(voices):
@@ -366,7 +375,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         score = scoring.score(ql.fit, top, newest, today, found.get("email_status") or "")
         leads.append(dict(
             login=login, name=name or login,
-            url=signals[0]["url"] if web else profile.get("html_url") or f"https://github.com/{login}",
+            url=(signals[0].get("profile") or signals[0]["url"]) if web else profile.get("html_url") or f"https://github.com/{login}",
             company=company, email=found.get("email") or "", email_status=found.get("email_status") or "",
             domain=found.get("domain") or "", linkedin_url=found.get("linkedin_url") or "",
             position=found.get("position") or "", enrich=" · ".join(found["steps"]), newest=newest,

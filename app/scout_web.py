@@ -9,6 +9,8 @@ import re
 from datetime import datetime
 from urllib.parse import urlparse
 
+from app import sources
+
 SOURCES = {
     "hn": ["news.ycombinator.com"],
     "reddit": ["reddit.com"],
@@ -138,15 +140,19 @@ def _tavily_search(per_query: int):
 last = {"queries": 0, "failed": 0}  # the most recent sweep, so the caller can say when searches failed
 
 
-def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None,
+def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None, hn=None, reddit=None,
                 per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None) -> list[dict]:
+    """Tavily results, plus Hacker News records with an author and a date, plus Reddit authors from the post JSON.
+
+    `hn` and `reddit` default to the live sources only when `search` is not injected, so a test never reaches out.
+    """
+    sources.last.update(hn_requests=0, hn_failed=0, reddit_ok=0, reddit_blocked=False)
     if search is None:
-        if not os.environ.get("TAVILY_API_KEY"):
-            return []
-        search = _tavily_search(per_query)
+        hn, reddit = hn or sources.hn_voices, reddit or sources.reddit_post
+        search = _tavily_search(per_query) if os.environ.get("TAVILY_API_KEY") else None
     domains = clean_domains(domains) or _domains()  # the Planner's channels, else every known source
     best: dict[str, dict] = {}
-    qs = queries(pains, areas)
+    qs = queries(pains, areas) if search else []  # no Tavily key: Hacker News alone
     last.update(queries=len(qs), failed=0)
     for q in qs:
         try:
@@ -167,8 +173,15 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
                 continue
             best[url] = {"id": "web:" + hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()[:10], "repo": _host(url), "url": url,
                          "title": (r.get("title") or "").strip(), "body": content[:1500], "author": _author(url),
-                         "created": _date(r["published_date"]) if r.get("published_date") else "",
+                         "created": (_date(r["published_date"]) if r.get("published_date") else "") or sources.url_date(url),
                          "pain": q["pain"], "match": round(score, 2), "kind": "web"}
+    for v in best.values():  # a Reddit post found by Tavily carries no author or date; its public JSON does
+        if reddit and v["repo"].endswith("reddit.com") and not v["author"] and sources.last["reddit_ok"] < sources.MAX_REDDIT:
+            if got := reddit(v["url"]):
+                v.update(author=got["author"], created=v["created"] or got["created"], profile=got["profile"])
+    if hn and "news.ycombinator.com" in domains:
+        for v in hn(pains):  # the structured record wins over a Tavily result for the same item
+            best[v["url"]] = v
     return sorted(best.values(), key=lambda v: -v["match"])
 
 
@@ -176,6 +189,11 @@ def as_people(voices: list[dict]) -> list[tuple[str, list[dict]]]:
     people: dict[str, list[dict]] = {}
     for v in voices:
         slot = "u/" if v["repo"].endswith("reddit.com") else ""
-        key = f"{v['repo']}/{slot}{v['author']}" if v.get("author") else v["id"]
+        if not v.get("author"):
+            key = v["id"]
+        elif v["repo"] == "news.ycombinator.com":
+            key = "hn:" + v["author"]  # named, so app.policy's no-author hold (login "web:…") does not apply
+        else:
+            key = f"{v['repo']}/{slot}{v['author']}"
         people.setdefault(key, []).append(v)
     return list(people.items())

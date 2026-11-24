@@ -1,6 +1,15 @@
 import hashlib
 
+import pytest
+
 from app import scout_web as w
+from app import sources
+
+
+@pytest.fixture(autouse=True)
+def offline(monkeypatch):  # the default path reaches Hacker News and Reddit; no test may
+    monkeypatch.setattr(sources, "hn_voices", lambda pains: [])
+    monkeypatch.setattr(sources, "reddit_post", lambda url: None)
 
 LONG = "We keep chasing late invoices by hand and our usage billing is a spreadsheet nightmare every month. " * 2
 
@@ -207,3 +216,86 @@ def test_failed_searches_are_counted_not_hidden():
         return []
     assert w.find_voices(["late invoices", "wrong totals"], [], search=flaky) == []
     assert w.last == {"queries": 2, "failed": 1}
+
+
+def _hn(url="https://news.ycombinator.com/item?id=7", author="ada"):
+    return {"id": "web:x", "repo": "news.ycombinator.com", "url": url, "title": "t", "body": LONG, "author": author,
+            "created": "2026-01-02", "pain": "p", "match": 0.5, "kind": "web",
+            "profile": "https://news.ycombinator.com/user?id=" + author}
+
+
+def test_hn_record_wins_over_tavily_for_the_same_item_and_only_when_hn_is_a_channel():
+    s = fake([hit("https://news.ycombinator.com/item?id=7", 0.9), hit("https://dev.to/a", 0.8)])
+    got = {v["url"]: v for v in w.find_voices(["p"], search=s, hn=lambda pains: [_hn()])}
+    assert len(got) == 2 and got["https://news.ycombinator.com/item?id=7"]["author"] == "ada"
+    assert got["https://news.ycombinator.com/item?id=7"]["created"] == "2026-01-02"
+    asked = []
+    w.find_voices(["p"], search=s, hn=lambda pains: asked.append(pains) or [_hn()], domains=["dev.to"])
+    assert asked == []  # Hacker News is heard only when it is one of the Planner's channels
+
+
+def test_no_tavily_key_still_hears_hacker_news(monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setattr(sources, "hn_voices", lambda pains: [_hn()])
+    [v] = w.find_voices(["p"])
+    assert v["author"] == "ada" and w.last["queries"] == 0
+
+
+def test_as_people_names_an_hn_author_and_policy_does_not_hold_it():
+    from app.policy import _no_named_author
+    [(login, signals)] = w.as_people([_hn()])
+    assert login == "hn:ada" and signals[0]["profile"] == "https://news.ycombinator.com/user?id=ada"
+    assert not _no_named_author({"login": login, "signals": signals})
+    assert not _no_named_author({"login": login})  # stored shape
+
+
+def test_reddit_author_filled_from_its_json():
+    s = fake([hit("https://www.reddit.com/r/saas/comments/abc/slug/", 0.9)])
+    seen = []
+    got = {"author": "bob", "created": "2025-05-06", "body": "x", "profile": "https://www.reddit.com/user/bob"}
+    [v] = w.find_voices(["p"], search=s, reddit=lambda url: seen.append(url) or got)
+    assert seen == ["https://www.reddit.com/r/saas/comments/abc/slug/"]
+    assert (v["author"], v["created"], v["profile"]) == ("bob", "2025-05-06", "https://www.reddit.com/user/bob")
+    assert dict(w.as_people([v])).keys() == {"reddit.com/u/bob"}
+
+
+def test_url_path_date_fills_a_missing_date():
+    [v] = w.find_voices(["p"], search=fake([hit("https://forum.example.com/2025/03/04/late-invoices", 0.9)]),
+                        domains=["forum.example.com"])
+    assert v["created"] == "2025-03-04"
+
+
+def test_drop_sellers_checks_the_hn_username():
+    assert w.drop_sellers([_hn(author="flexprice_team"), _hn(author="ada")], ["Flexprice"]) == [_hn(author="ada")]
+
+
+def test_build_leads_turns_an_hn_voice_into_a_named_drafted_lead(monkeypatch):
+    from app import pipeline
+    s_ = pipeline.Scored(values=["x"], confidence=0.9)
+    icp = pipeline.ICP(product="P", industries=s_, company_size=s_, personas=s_, triggers=s_, pains=["pain one"],
+                       negative_signals=[], expansion=[], competitors=[], tracker_fit=True, tracker_fit_reason="ok",
+                       channels=[], process_areas=[])
+    issues = [dict(id="o/r#1", repo="o/r", url="https://github.com/o/r/issues/1", title="t", body="b",
+                   author="gh1", created="2026-11-01")]
+
+    async def done(v):
+        return v
+    enriched = []
+    monkeypatch.setattr(pipeline, "gh", lambda path, **k: {})
+    monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: issues)
+    monkeypatch.setattr(pipeline, "match_pains", lambda *a: done({"o/r#1": ("pain one", 0.9)}))
+    monkeypatch.setattr(sources, "hn_voices", lambda pains: [_hn()])
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: enriched.append(a) or {"email": "", "email_status": "", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
+    monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "ask", lambda schema, system, user: icp if schema is pipeline.ICP else pipeline.Qualification(
+        fit=80, production_user=False, role="r", reason="r", subject="Short subject", body="Short body."))
+    said = []
+    _, leads = pipeline.build_leads("a product description long enough", "o/r", say=said.append)
+    [lead] = [l for l in leads if l["login"] == "hn:ada"]
+    assert lead["name"] == "ada" and lead["url"] == "https://news.ycombinator.com/user?id=ada"
+    assert lead["signals"][0]["url"] == "https://news.ycombinator.com/item?id=7"  # the link to what they wrote
+    assert lead["draft_status"] == "pending" and lead["body"] and lead["email"] == ""
+    assert not any(a[0] == "ada" for a in enriched)  # a username is never sent to Hunter as a name
+    assert any("1 Hacker News posts" in x for x in said)
