@@ -36,16 +36,25 @@ const sec = (key, inner, id) => `<section class="sec${enter(key)}"${id ? ` id="$
 const vals = f => Array.isArray(f) ? f : (f?.values || []);
 const lowerFirst = t => /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
-const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+const cap = t => t && !/^[\w.-]+\/[\w.-]+\s/.test(t) ? t[0].toUpperCase() + t.slice(1) : t;  // an owner/repo keeps its case
 const noTag = t => String(t || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, "");  // "[BUG]: x" reads as "x"
 const initials = n => String(n || "?").replace(/^Someone on /, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "?";
 const noAuthor = l => l.draft_status === "no_author";
-const whoOf = l => noAuthor(l) ? `Someone on ${hostOf(l.url) || "the web"}` : nameOf(l);
+const postOf = l => l.url || l.signals?.[0]?.url || "";
+const whoOf = l => noAuthor(l) || /^web:/.test(nameOf(l)) ? `Someone on ${hostOf(postOf(l)) || "the web"}` : nameOf(l).replace(/^hn:/, "");
+// Where a person was heard, from their login's prefix and their post's host.
+const srcOf = l => { const lg = String(l.login || ""), h = hostOf(postOf(l));
+  return lg.startsWith("hn:") ? "Hacker News" : /^reddit\.com\//.test(lg) || /(^|\.)reddit\.com$/.test(h) ? "Reddit" : lg.startsWith("web:") ? h || "The web" : "GitHub"; };
+// The one display name for a login or a lead; a login no longer in leads loses its "hn:"/"web:" prefix.
+const person = x => { const l = typeof x === "string" ? ui.data?.leads.find(l => l.login === x) : x;
+  return l ? whoOf(l) + (srcOf(l) === "Hacker News" ? " on Hacker News" : "") : String(x || "").replace(/^(hn|web):/, ""); };
+const inLine = n => n.replace(/^Someone on /, "someone on ");
+const clock = ts => { const t = new Date(ts); return isNaN(t) ? "" : t.toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}); };
 const EAR = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 3.5h8a1.5 1.5 0 0 1 1.5 1.5v4.5A1.5 1.5 0 0 1 12 11H8l-3 2.5V11H4a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 4 3.5Z"/></svg>`;
 // A face for every person: their GitHub avatar, else their initials; a post with no author gets a neutral speech mark.
 const avatar = (l, big) => {
   if (noAuthor(l)) return `<span class="av${big ? " big" : ""}">${EAR}</span>`;
-  const gh = l.login && !l.login.startsWith("web:");
+  const gh = l.login && srcOf(l) === "GitHub";
   return `<span class="av${big ? " big" : ""}"><span aria-hidden="true">${esc(initials(nameOf(l)))}</span>${gh ? `<img src="https://github.com/${encodeURIComponent(l.login)}.png?size=160" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
 };
 const when = d => { const t = new Date(d || ""); return isNaN(t) ? "" : t.toLocaleDateString(undefined, {month: "short", year: "numeric"}); };
@@ -103,7 +112,7 @@ function story(d, example) {
   const scan = logm(d, /(\d+) of (\d+) issues describe a target pain, from (\d+) people/);
   const chans = vals(i.channels).filter(c => c.domain);
   const kept = logm(d, /(\d+) leads kept/), dropped = logm(d, /dropped (\d+) people whose issue/);
-  const flagged = logm(d, /(\d+) make a claim the evidence does not show/), rew = logm(d, /(\d+) drafts claimed more .* (\d+) now pass, (\d+) held/);
+  const flagged = logm(d, /(\d+) makes? a claim the evidence does not show/), rew = logm(d, /(\d+) drafts? claimed more .* (\d+) now pass(?:es)?, (\d+) held/);
   const msgs = leads.filter(l => !noAuthor(l)), pending = msgs.filter(l => (l.draft_status || "pending") === "pending").length;
   const sells = String(i.product || "").replace(/^[^:]{1,40}:\s*/, "").split(/\s+/).slice(0, 6).join(" ").replace(/[,;:.]$/, "");
   const drops = (d.status.log || []).filter(l => /^(Qualifier|Scout): dropped/.test(l)).map(l => cap(PLAIN(strip(l))));
@@ -120,7 +129,7 @@ function story(d, example) {
     {t: `Kept <em>${kept ? kept[1] : leads.length}</em> worth writing to`, n: dropped ? `${dropped[1]} dropped as not a fit` : "",
       more: more([...drops.map(esc), "Posts with no named author are kept as evidence only: there is nobody to write to."], example ? "" : "#leads", "See the people")},
     {t: pending ? `Wrote <em>${plural(msgs.length, "message", "messages")}</em>. They wait for you.` : `<em>${plural(msgs.length, "message", "messages")}</em> decided`, n: "", pending, example,
-      more: more([flagged ? `A second model checked every message against what the person wrote; ${flagged[1]} claimed more than they wrote${rew ? `, ${rew[1]} were rewritten, ${rew[3]} are held` : ""}.` : "A second model checked every message against what the person wrote.",
+      more: more([flagged ? `A second model checked every message against what the person wrote; ${flagged[1]} claimed more than they wrote${rew ? `, ${rew[1]} ${+rew[1] === 1 ? "was" : "were"} rewritten, ${rew[3]} ${+rew[3] === 1 ? "is" : "are"} held` : ""}.` : "A second model checked every message against what the person wrote.",
         "Nothing is sent to the person in this demo."], example ? "" : "#step-5", "What happened to each")},
   ];
 }
@@ -173,7 +182,7 @@ function homeCustomer(d, example) {
     <span class="r-t"><i>${esc(s.repo || hostOf(s.url))}</i> ${esc(noTag(s.title))}</span><span class="r-n">${esc(whoOf(by(s.login)))}${AR}</span></a></li>`).join("");
   const top = [...leads].sort((a, b) => b.score - a.score).slice(0, 3);
   const personCard = l => { const inner = `<div class="card-media">${avatar(l, true)}</div><div class="card-body"><p class="card-title">${esc(whoOf(l))}${example ? "" : AR}</p>
-      <p class="meta">${esc([l.company || (noAuthor(l) ? "Evidence only" : "GitHub"), `Score ${l.score}`].join(" · "))}</p></div>`;
+      <p class="meta">${esc([l.company || (noAuthor(l) ? "Evidence only" : srcOf(l)), `Score ${l.score}`].join(" · "))}</p></div>`;
     return `<li>${example ? `<div class="card">${inner}</div>` : `<button type="button" class="card" data-open="${esc(l.login)}" data-go-leads>${inner}</button>`}</li>`; };
   return hero + storyLine(d, example) +
     (pains.length ? sec(example ? "s-pains" : "h-pains", secHead("What they struggle with", `${["One", "Two", "Three"][pains.length - 1]} <em>${pains.length === 1 ? "pain" : "pains"}</em>`) + `<ul class="cards">${painCards}</ul>`, "pains") : "") +
@@ -315,7 +324,7 @@ const RUN = [
   {name: "Checking each person", done: /^(Enricher → Writer|Writer →)/,
     result: log => { const m = log.map(l => l.match(/^Enricher → Writer: (\d+) leads kept/)).find(Boolean); return m && `${plural(+m[1], "person", "people")} kept`; }},
   {name: "Writing to each", done: /^Done:/,
-    result: log => { const m = log.map(l => l.match(/(\d+) messages drafted/)).find(Boolean); return m && plural(+m[1], "message", "messages"); }},
+    result: log => { const m = log.map(l => l.match(/(\d+) messages? drafted/)).find(Boolean); return m && plural(+m[1], "message", "messages"); }},
 ];
 // --- the working line: what the run is doing now, read from its newest log line; nothing here advances on a timer ---
 // Every log line carries the server's own timestamp (status.events is appended with it in pipeline.say).
@@ -354,10 +363,10 @@ function working(log) {
     [/^Scout → Qualifier/, () => ["Checking", "each person"]],
     [/^Qualifier → Enricher: scored; looking/, () => ["Looking up", "work emails"]],
     [/^Qualifier → Enricher/, () => ["Writing", "to each person"]],
-    [/^Enricher → Writer: (\d+) leads kept/, m => ["Writing", plural(+m[1], "message", "messages")]],
+    [/^Enricher → Writer: (\d+) leads kept/, () => { const w = log.map(l => l.match(/(\d+) messages? drafted/)).find(Boolean); return ["Writing", w ? plural(+w[1], "message", "messages") : "to each person"]; }],
     [/^Writer → Reviewer/, () => ["Checking", "every claim against what they wrote"]],
-    [/^Reviewer → Writer: (\d+) drafts broke/, m => ["Rewriting", `${m[1]} that broke a writing rule`]],
-    [/^Reviewer: checked .*; (\d+) make a claim/, m => +m[1] ? ["Rewriting", `${m[1]} that said too much`] : ["Running", "its own checks"]],
+    [/^Reviewer → Writer: (\d+) drafts? broke/, m => ["Rewriting", `${m[1]} that broke a writing rule`]],
+    [/^Reviewer: checked .*; (\d+) makes? a claim/, m => +m[1] ? ["Rewriting", `${m[1]} that said too much`] : ["Running", "its own checks"]],
     [/^Reviewer → Writer: .*claimed more/, () => ["Running", "its own checks"]],
     [/^Done:/, () => ["Done", ""]],
     [/^Failed:/, () => ["Stopped", ""]],
@@ -372,7 +381,7 @@ const fmtCredits = n => `${+n.toFixed(1)} ${n === 1 ? "credit" : "credits"}`;
 // One live counter that fits the step: posts read, then people found or kept, then messages written.
 function counter(d, cur) {
   const log = d.status.log || [], g = re => logm(d, re), posts = postsRead(log);
-  const kept = g(/^Enricher → Writer: (\d+) leads kept/), found = g(/from (\d+) people/), msgs = g(/(\d+) messages drafted/);
+  const kept = g(/^Enricher → Writer: (\d+) leads kept/), found = g(/from (\d+) people/), msgs = g(/(\d+) messages? drafted/);
   return [null, null, posts ? `${posts} posts read` : null, kept ? `${kept[1]} kept` : found ? `${found[1]} people found` : null, msgs ? plural(+msgs[1], "message", "messages") + " written" : null][cur] || null;
 }
 // The tool a line implies, from what the step does.
@@ -395,7 +404,8 @@ function runView() {
   const d = ui.data, log = d.status.log || [], start = runStart(d);
   const doneAt = RUN.map(s => log.findIndex(l => s.done.test(l)));
   const cur = doneAt.findIndex(i => i < 0), step = cur < 0 ? 5 : cur + 1;
-  const site = ui.target ? hostOf(/^https?:/.test(ui.target) ? ui.target : "https://" + ui.target) || ui.target : "";
+  const tgt = ui.target || log.map(l => l.match(/^Planner: reading (\S+)/)).find(Boolean)?.[1] || "";
+  const site = tgt ? hostOf(/^https?:/.test(tgt) ? tgt : "https://" + tgt) || tgt : "";
   const phrase = phraseOf(working(log)), fresh = ui.phrase !== undefined && phrase !== ui.phrase; ui.phrase = phrase;
   const last = tsOf(d, log.length - 1) || start, count = counter(d, cur), spent = spentSince(d, start);
   const meta = [`<span data-elapsed="${start}">${dur(Date.now() - start)}</span>`, `step ${step} of 5`, count, spent ? `${fmtCredits(spent)} used` : null].filter(Boolean).join(`<span class="dot" aria-hidden="true">·</span>`);
@@ -543,7 +553,7 @@ function board(shown, stages) {
   const card = l => { const open = ui.moving === l.login;
     return `<li class="bcard" draggable="true" data-drag="${esc(l.login)}"><button type="button" class="bc-open" data-open="${esc(l.login)}">${avatar(l)}
       <span class="bc-name">${esc(whoOf(l))}<small class="meta">${esc([l.company, `Score ${l.score}`].filter(Boolean).join(" · "))}</small></span></button>
-      <p class="bc-foot"><span>${flashFor(l.login) || `moved by ${esc(who(l.stage_actor) || "Overheard")}`}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
+      <p class="bc-foot"><span>${flashFor(l.login) || (l.stage !== "Matched" ? `moved by ${esc(who(l.stage_actor) || "Overheard")}` : "")}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
       <div class="mv-menu" id="mv-${esc(l.login)}" role="group" aria-label="Move ${esc(whoOf(l))} to"${open ? "" : " hidden"}>${stages.map(s => `<button type="button" data-stage-to="${esc(s)}" data-login="${esc(l.login)}"${s === l.stage ? ` aria-current="true" disabled` : ""}>${esc(s)}</button>`).join("")}</div></li>`; };
   return `<div class="board${enter("board")}">${stages.map(s => { const ls = shown.filter(l => l.stage === s);
     return `<section class="col" data-drop="${esc(s)}" aria-label="${esc(s)}"><p class="label bare">${esc(s)} <span class="num">${ls.length}</span></p><ul class="col-list">${ls.map(card).join("")}</ul></section>`; }).join("")}</div>`;
@@ -568,8 +578,8 @@ function detail() {
   if (!l) { el.innerHTML = ""; return; }
   const done = l.draft_status !== "pending";
   el.innerHTML = `${avatar(l, true)}<h2 class="display">${esc(whoOf(l))}</h2>
-    <p class="meta">${esc([l.company, `Score ${l.score}`, TIER[l.tier], l.stage].filter(Boolean).join(" · "))}</p>
-    <p class="facts"><a href="${safeUrl(l.url)}" target="_blank" rel="noopener">${l.url.startsWith("https://github.com/") ? "GitHub" : "Their post"} ↗</a></p>
+    <p class="meta">${esc([l.company || (noAuthor(l) ? "" : srcOf(l)), `Score ${l.score}`, TIER[l.tier], l.stage].filter(Boolean).join(" · "))}</p>
+    <p class="facts"><a href="${safeUrl(l.url)}" target="_blank" rel="noopener">${l.url.startsWith("https://github.com/") ? "GitHub" : srcOf(l) === "GitHub" ? "Their post" : esc(srcOf(l))} ↗</a></p>
     <p class="reason">${esc(l.reason)}</p>
     ${personFacts(l)}
     <section class="block">${secHead("What they wrote", "In their <em>words</em>")}<ul class="rows">
@@ -605,7 +615,7 @@ function personFacts(l) {
 }
 function personHistory(l) {
   const hist = ui.data.events.filter(e => e.login === l.login).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-  return `${hist.length ? `<section class="block">${secHead("History", "What <em>happened</em>")}<ul class="rows facts-rows">${hist.map(e => fact(esc(String(e.ts).slice(5, 10) + " " + String(e.ts).slice(11, 16)), `${esc(cap(e.action))}${e.detail && e.action !== "matched" ? ` <small>${esc(e.detail)}</small>` : ""}`, esc(who(e.actor)))).join("")}</ul></section>` : ""}`;
+  return `${hist.length ? `<section class="block">${secHead("History", "What <em>happened</em>")}<ul class="rows facts-rows">${hist.map(e => fact(esc(String(e.ts).slice(5, 10) + " " + clock(e.ts)), `${esc(cap(e.action))}${e.detail && e.action !== "matched" ? ` <small>${esc(e.detail)}</small>` : ""}`, esc(who(e.actor)))).join("")}</ul></section>` : ""}`;
 }
 
 const LEVELS = ["shadow", "supervised", "autopilot"];  // mirrors app/trust.py
@@ -621,7 +631,7 @@ function activityView() {
   const gates = trust.gates || [], met = gates.filter(g => g.passed).length, level = String(trust.level || "unknown");
   const li = LEVELS.indexOf(level), up = li >= 0 && li < LEVELS.length - 1 ? LEVELS[li + 1] : null, target = up || (li > 0 ? LEVELS[li - 1] : null);
   const ag = trust.agreement || {};
-  const gateVal = g => g.key === "agreement" && ag.n ? `${ag.agree} of ${ag.n} matched` : String(g.value ?? "–");
+  const gateVal = g => g.key === "agreement" && ag.n ? `${ag.agree} of ${ag.n} matched` : String(g.value ?? "–").replace(/^(\d+) of (\d+) decisions needed$/, "$1 of the $2 decisions it needs");
   const rows = [...billing.ledger].sort((a, b) => String(b.ts).localeCompare(String(a.ts))), capN = 12, shown = ui.ledgerAll ? rows : rows.slice(0, capN);
   const sending = m.connected ? `Gmail${m.address ? ` · ${esc(m.address)}` : ""}` : m.resend ? "a test inbox" : "nowhere yet";
   const block = (id, k, title, body) => `<section class="sec" id="${id}" style="border-top:0;padding-top:0">${secHead(k, title)}${body}</section>`;
@@ -631,8 +641,8 @@ function activityView() {
   const extra = [
     "", "", "",
     "",
-    `${checks.length ? `<ul class="rows" style="margin-top:var(--space-8)">${checks.map(c => `<li><div class="r"><span class="r-k">${esc(RULE_SAYS[c.rule] ? "Held" : "Check")}</span><span class="r-t">${esc(c.login)}<small>${esc(RULE_SAYS[c.rule] || String(c.rule).replace(/_/g, " "))}: ${esc(c.detail)}</small></span><span class="r-n">Second model</span></div></li>`).join("")}</ul>` : ""}
-     ${events.length ? `<ul class="rows" style="margin-top:var(--space-8)">${events.map(e => `<li><div class="r"><span class="r-k">${esc(e.ts.slice(11, 16))}</span><span class="r-t">${esc(cap(e.action))} <i>${esc(e.login)}</i>${e.detail ? `<small>${esc(e.detail)}</small>` : ""}</span><span class="r-n">${esc(who(e.actor))}</span></div></li>`).join("")}</ul>` : ""}
+    `${checks.length ? `<ul class="rows" style="margin-top:var(--space-8)">${checks.map(c => `<li><div class="r"><span class="r-k">${esc(RULE_SAYS[c.rule] ? "Held" : "Check")}</span><span class="r-t">${esc(person(c.login))}<small>${esc(RULE_SAYS[c.rule] || String(c.rule).replace(/_/g, " "))}: ${esc(c.detail)}</small></span><span class="r-n">Second model</span></div></li>`).join("")}</ul>` : ""}
+     ${events.length ? `<ul class="rows" style="margin-top:var(--space-8)">${events.map(e => `<li><div class="r"><span class="r-k">${esc(clock(e.ts))}</span><span class="r-t">${esc(cap(e.action))} <i>${esc(inLine(person(e.login)))}</i>${e.detail ? `<small>${esc(e.detail)}</small>` : ""}</span><span class="r-n">${esc(who(e.actor))}</span></div></li>`).join("")}</ul>` : ""}
      <p class="sub">Messages go to ${sending}. ${m.connected || m.resend ? "Never to the person." : "Nothing is sent."}</p>
      ${m.connected ? `<div class="actions"><button type="button" class="btn quiet" data-gmail-disconnect>Disconnect Gmail</button></div>` : m.configured ? `<div class="actions"><a class="btn quiet" href="/api/gmail/connect">Connect Gmail</a></div>` : ""}`,
   ];
@@ -644,7 +654,7 @@ function activityView() {
        <p class="sub">Overheard may send on its own only when all five of these are true.</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up === "autopilot" ? "Ask to send on its own" : up ? "Let it draft for you" : "Go back to approving each"}</button></div>` : ""}`) +
     block("credits", "Credits", `<span class="credits-n num">${Math.floor(billing.credits)}</span> <em>left</em>`,
       `<p class="sub" style="margin:0 0 var(--space-6)">${billing.mode === "flexprice" ? "Metered by Flexprice." : "Local wallet."} Looking up a work email costs ${billing.costs["lead.enriched"]} · sending a message ${billing.costs["outreach.sent"]}.</p>
-       ${rows.length ? `<ul class="rows">${shown.map(e => `<li><div class="r ledger"><span class="r-k">${esc(String(e.ts).slice(11, 19))}</span><span class="r-t">${esc(SPEND[e.event] || e.event)}${e.ok ? "" : " (not recorded)"}${e.lead ? ` <i>${esc(e.lead)}</i>` : ""}</span><span class="r-n">${Number(e.credits).toFixed(1)}</span></div></li>`).join("")}</ul>
+       ${rows.length ? `<ul class="rows">${shown.map(e => `<li><div class="r ledger"><span class="r-k">${esc(String(e.ts).slice(11, 19))}</span><span class="r-t">${esc(SPEND[e.event] || e.event)}${e.ok ? "" : " (not recorded)"}${e.lead ? ` <i>${esc(inLine(person(e.lead)))}</i>` : ""}</span><span class="r-n">${Number(e.credits).toFixed(1)}</span></div></li>`).join("")}</ul>
        ${rows.length > capN && !ui.ledgerAll ? `<p class="center"><button type="button" class="pill" data-ledger-all>See all ${rows.length} <span aria-hidden="true">⌄</span></button></p>` : ""}` : `<p class="muted">No spend yet.</p>`}
        ${billing.mode === "local" ? `<div class="actions"><button type="button" class="btn quiet" data-topup="20">Add 20 credits</button></div>` : ""}`);
 }
@@ -656,14 +666,16 @@ function graphRows(d) {
   const P = ids(m.people), C = ids(m.companies), R = new Map((m.repos || []).map(r => [r.id, r.kind])), pains = new Map((m.pains || []).map(p => [p.id, p.text]));
   const count = (pick) => { const c = new Map(); E.forEach(e => { const k = pick(e); if (k) c.set(k, (c.get(k) || 0) + 1); }); return [...c].sort((a, b) => b[1] - a[1]); };
   const topPain = count(e => pains.has(e.from) && P.has(e.to) ? e.from : null)[0];
-  const topRepo = count(e => P.has(e.from) && R.get(e.to) === "competitor" ? e.to : null)[0];
+  // A competitor's tracker is an owner/name repository of kind "competitor", never a web host; the server's own finding wins.
+  const disp = found.find(i => i.key === "displacement");
+  const topRepo = disp ? null : count(e => P.has(e.from) && R.get(e.to) === "competitor" && /^[\w.-]+\/[\w.-]+$/.test(e.to) && !/^[^/]+\.[a-z]{2,}\//i.test(e.to) ? e.to : null)[0];
   const shared = count(e => P.has(e.from) && C.has(e.to) ? e.to : null).filter(c => c[1] > 1);
   const people = P.size, stages = d.stages || [], max = Math.max(1, d.leads.length);
   const finds = [
     topPain && topPain[1] > 1 ? fact("Most voiced", esc(headline(pains.get(topPain[0]))), plural(topPain[1], "person", "people")) : "",
-    topRepo ? fact("Competitor", `${topRepo[1]} of the ${people} were found complaining on <i>${esc(topRepo[0])}</i>`, "Competitor tracker") : "",
+    disp ? fact("Competitor", esc(disp.title), "Graph query") : topRepo ? fact("Competitor", `${topRepo[1]} of the ${people} were found complaining on <i>${esc(topRepo[0])}</i>`, "Competitor tracker") : "",
     ...shared.map(([c, k]) => fact("Company", `${k} people at <i>${esc(c)}</i>`, "One account")),
-    ...found.filter(i => i.key === "shared_pain" || i.key === "freshest").map(i => fact(i.key === "shared_pain" ? "Shared pain" : "Freshest", esc(i.title), "Graph query")),
+    ...found.filter(i => i.key === "shared_pain" || i.key === "freshest").map(i => fact(i.key === "shared_pain" ? "Shared pain" : "Freshest", esc(i.title.replace(/, by (.+)\.$/, (m, lg) => `, by ${inLine(person(lg))}.`)), "Graph query")),
   ].join("");
   return `<ul class="rows facts-rows">${fact("Counts", `<span class="num">${[plural(people, "person", "people"), plural(C.size, "company", "companies"), plural(R.size, "tracker", "trackers"), plural(pains.size, "pain", "pains"), plural(E.length, "link", "links")].join(" · ")}</span>`)}
     ${finds}${fact("Conversion", `<span class="conv">${stages.map(s => { const k = d.leads.filter(l => l.stage === s).length;
@@ -711,8 +723,8 @@ async function refresh(force) {
     if (!data.status.running) try { sessionStorage.removeItem("earshot.runStart"); } catch (e) { /* blocked */ }
     ui.data = data; ui.json = json;
     window.EarshotAsk?.update(data, ASK);
-    if (!ui.desc && !ui.target && data.icp?.sources?.length) ui.target = data.icp.sources[0];
-    else if (!ui.desc && data.icp?.description) { ui.desc = data.icp.description; ui.repo = data.icp.product_repo || ""; }
+    // The website field is never pre-filled: a stray Enter beside the primary button would start a paid run.
+    if (!ui.desc && !data.icp?.sources?.length && data.icp?.description) { ui.desc = data.icp.description; ui.repo = data.icp.product_repo || ""; }
     render();
   } catch (e) { if ($("home-line")) $("home-line").textContent = "Cannot reach the server."; console.error(e); }
 }
@@ -755,7 +767,7 @@ document.addEventListener("click", async e => {
   if (e.target.closest("[data-not-quite]")) { ui.confirm.other = true; return showConfirm(); }
   if (e.target.closest("[data-example]")) return flip("example", true);
   if (e.target.closest("[data-example-off]")) { flip("example", false); return $("target")?.focus(); }
-  if (e.target.closest("[data-restart]")) { flip("restart", true); return $("target")?.focus(); }
+  if (e.target.closest("[data-restart]")) { ui.target = ""; flip("restart", true); return $("target")?.focus(); }
   if (e.target.closest("[data-restart-off]")) return flip("restart", false);
   if (e.target.closest("[data-trail-all]")) { ui.trailAll = true; renderHome(); return; }
   if (e.target.closest("[data-ledger-all]")) { ui.ledgerAll = true; renderPanel(); return; }

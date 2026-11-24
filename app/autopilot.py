@@ -75,8 +75,9 @@ def review_drafts(leads: list[dict]) -> None:
     st["reviews"] = {l["login"]: reviewer.review(l, reviewer.snap_judge) for l in todo}
     bad = sum(1 for r in st["reviews"].values() if r["verdict"] == "fail")
     unchecked = sum(1 for r in st["reviews"].values() if r["verdict"] == "unchecked")
-    pipeline.say(f"Reviewer: checked {len(todo) - unchecked} drafts against the evidence with a second model; "
-                 f"{bad} make a claim the evidence does not show" + (f"; {unchecked} could not be checked" if unchecked else ""))
+    checked = sum(1 for l in todo if l.get("draft_status") != "no_author" and st["reviews"][l["login"]]["verdict"] != "unchecked")
+    pipeline.say(f"Reviewer: checked {pipeline._n(checked, 'draft')} against the evidence with a second model; "
+                 f"{bad} {'makes' if bad == 1 else 'make'} a claim the evidence does not show" + (f"; {unchecked} could not be checked" if unchecked else ""))
     save(st)
 
 
@@ -110,7 +111,7 @@ def run_sender(st: dict | None = None) -> int:
         store.log(lead["login"], "agent", "released", f"inside policy, passed review; {mailer.describe(result)}")
         released += 1
     if released or held:
-        pipeline.say(f"Sender: released {released} messages inside your policy; {held} held for you")
+        pipeline.say(f"Sender: released {pipeline._n(released, 'message')} inside your policy; {held} held for you")
     return released
 
 

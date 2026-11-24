@@ -185,6 +185,33 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
     return sorted(best.values(), key=lambda v: -v["match"])
 
 
+GH_ISSUE = re.compile(r"^https://github\.com/([^/]+/[^/]+)/(issues|discussions)/(\d+)")
+MAX_GH_LOOKUPS = 5
+
+
+def github_voices(voices: list[dict], trackers, gh) -> list[dict]:
+    """A GitHub issue found by web search has a named author, but not in its URL.
+
+    When its tracker is already being read, the issue is found there with its author, so the web copy is dropped.
+    Otherwise GitHub is asked once for the author (at most MAX_GH_LOOKUPS a run). Never raises.
+    """
+    read, out, asked = {str(t).lower() for t in trackers}, [], 0
+    for v in voices:
+        m = GH_ISSUE.match(v.get("url") or "")
+        if m and m[1].lower() in read:
+            continue
+        if m and m[2] == "issues" and not v.get("author") and asked < MAX_GH_LOOKUPS:
+            asked += 1
+            try:
+                got = gh(f"/repos/{m[1]}/issues/{m[3]}") or {}
+                if login := (got.get("user") or {}).get("login"):
+                    v.update(author=login, created=v.get("created") or (got.get("created_at") or "")[:10])
+            except Exception:  # the post stays evidence with no named author
+                pass
+        out.append(v)
+    return out
+
+
 def as_people(voices: list[dict]) -> list[tuple[str, list[dict]]]:
     people: dict[str, list[dict]] = {}
     for v in voices:

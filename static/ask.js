@@ -169,16 +169,17 @@ window.EarshotAsk = (() => {
   function leadItem(l) {
     const sig = (l.signals || []).slice().sort((a, b) => (b.match || 0) - (a.match || 0))[0];
     const company = String(l.company || "").replace(/^@/, "").trim();
-    const name = l.name || l.login;
+    const hn = String(l.login || "").startsWith("hn:"), host = (() => { try { return new URL(sig.url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+    const name = /^web:/.test(l.name || l.login) ? `someone on ${host || "the web"}` : String(l.name || l.login).replace(/^hn:/, "");
     const when = sig && sig.created ? new Date(sig.created) : null;
     const whenText = when && !isNaN(when) ? when.toLocaleDateString(undefined, {month: "short", year: "numeric"}) : "";
     return {
       key: "lead:" + l.login, kind: "lead", login: l.login, yesno: true, name, company,
-      face: l.login && !l.login.startsWith("web:") ? `https://github.com/${encodeURIComponent(l.login)}.png?size=64` : "",
+      face: l.login && !/^(web|hn):/.test(l.login) && !/\//.test(l.login) ? `https://github.com/${encodeURIComponent(l.login)}.png?size=64` : "",
       kicker: "Your decision",
       q: `Write to ${name}?`,
       why: short(l.reason), reason: String(l.reason || ""), url: sig && /^https?:\/\//.test(sig.url || "") ? sig.url : "",
-      evidence: sig ? [String(sig.title || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, ""), [sig.repo, whenText].filter(Boolean).join(", ")] : null,
+      evidence: sig ? [String(sig.title || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, ""), [hn ? "Hacker News" : /(^|\.)reddit\.com$/.test(host) ? "Reddit" : sig.repo, whenText].filter(Boolean).join(", ")] : null,
       subject: l.subject || "", body: l.body || "",
       reasons: reasonsFor(l, company),
     };

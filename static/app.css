@@ -300,6 +300,7 @@ a.r:hover, button.r:hover { background: rgba(255, 255, 255, 0.55); }
 /* the nav's own copy of the line; at rest a still dot and one word */
 .nav .nav-status { gap: var(--space-2); max-width: 22rem; color: var(--color-ink); cursor: pointer; }
 .nav-status:empty { display: none; }
+@media (min-width: 52rem) { .nav .nav-status[data-state="run"] { min-width: 18rem; } }  /* the pill holds still while the working line changes */
 .nav-status .glyph { width: 16px; height: 16px; }
 .nav-status .ns-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .nav-status .ns-m { color: var(--color-muted); font-size: var(--text-xs); }

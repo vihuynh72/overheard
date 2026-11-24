@@ -111,8 +111,8 @@ def test_repair_drafts_saves_the_repaired_review_and_says_so(monkeypatch):
     pipeline.repair_drafts([lead, {**LEAD, "login": "ok", "body": "fine"}], judge=_judge("$40k"))
     assert len(asked) == 1 and "- You lose $40k." in asked[0] and "3,000 customers" in asked[0]
     assert saved and st["reviews"]["derek"]["repaired"] and st["reviews"]["derek"]["guard_removed"] == ["You have 9 staff."]
-    assert said == ["Reviewer → Writer: 1 drafts claimed more than the evidence shows; rewrote them from the evidence. "
-                    "1 now pass, 0 held for you."]
+    assert said == ["Reviewer → Writer: 1 draft claimed more than the evidence shows; rewrote it from the evidence. "
+                    "1 now passes, 0 held for you."]
 
 
 def test_a_rewrite_that_breaks_a_writing_rule_is_not_kept(monkeypatch):

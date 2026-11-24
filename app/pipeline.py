@@ -25,6 +25,11 @@ ICP_PATH = "data/icp.json"
 state = {"running": False, "log": [], "events": [], "error": ""}
 
 
+def _n(n: int, one: str, many: str = "") -> str:
+    """A count with its noun: 1 draft, 4 drafts."""
+    return f"{n} {one if n == 1 else many or one + 's'}"
+
+
 def say(msg: str) -> None:
     """Log a step. "Scout → Qualifier: text" is also recorded as a handoff the Floor view can draw."""
     state["log"].append(msg)
@@ -301,6 +306,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     if domains:
         say("Planner → Scout: listening on " + (", ".join(domains[:-1]) + " and " if len(domains) > 1 else "") + domains[-1])
     voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains)
+    voices = scout_web.github_voices(voices, repos, gh)
     if scout_web.last["failed"]:
         say(f"Scout: {scout_web.last['failed']} of {scout_web.last['queries']} web searches failed; those sources were not heard")
     src = scout_web.sources.last
@@ -387,11 +393,12 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
 
     verified = sum(1 for l in leads if l["email_status"] == "valid")
     say(f"Enricher → Writer: {len(leads)} leads kept, {verified} with an address verified by Hunter")
-    say(f"Writer → Reviewer: {len(leads)} messages drafted from each person's own words")
+    drafted = sum(1 for l in leads if l["draft_status"] != "no_author")  # a post with no author gets no message
+    say(f"Writer → Reviewer: {_n(drafted, 'message')} drafted from each person's own words")
     if weak:
         say(f"Qualifier: dropped {weak} people whose issue does not show a problem this product solves")
     if authorless := sum(1 for l in leads if l["draft_status"] == "no_author"):
-        say(f"Writer: wrote nothing for {authorless} posts with no named author; there is nobody to write to, "
+        say(f"Writer: wrote nothing for {_n(authorless, 'post')} with no named author; there is nobody to write to, "
             "so they are kept as evidence only")
 
     # Check, then fix once. A draft that still breaks a rule after one retry is left for the human to see.
@@ -401,7 +408,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         if f["rule"] in fixable and not f["login"].startswith("web:"):
             broken.setdefault(f["login"], []).append(f"{f['rule']}: {f['detail']}")
     if broken:
-        say(f"Reviewer → Writer: {len(broken)} drafts broke a writing rule; rewriting each once")
+        say(f"Reviewer → Writer: {_n(len(broken), 'draft')} broke a writing rule; rewriting each once")
 
         def redraft(lead):
             ql = ask(Qualification, QUALIFY_SYSTEM, lead["_prompt"] + "\n\nYour last draft broke these rules; "
@@ -415,8 +422,8 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         lead["body"], lead["_guard_removed"] = reviewer.guard(lead["body"], reviewer.full_evidence(lead))
         cut += bool(lead["_guard_removed"])
     if cut:
-        say(f"Reviewer: removed {sum(len(l['_guard_removed']) for l in leads)} sentences stating a number the person "
-            f"never wrote, from {cut} drafts")
+        say(f"Reviewer: removed {_n(sum(len(l['_guard_removed']) for l in leads), 'sentence')} stating a number the person "
+            f"never wrote, from {_n(cut, 'draft')}")
     for lead in leads:
         lead.pop("_prompt")
         for s in lead["signals"]:
@@ -456,8 +463,9 @@ def repair_drafts(leads: list[dict], judge=None) -> None:
         say(f"Reviewer: could not try rewrites ({type(e).__name__}); the first review stands")
         return
     if n["rewritten"]:
-        say(f"Reviewer → Writer: {n['rewritten']} drafts claimed more than the evidence shows; rewrote them from "
-            f"the evidence. {n['passed']} now pass, {n['held']} held for you.")
+        say(f"Reviewer → Writer: {_n(n['rewritten'], 'draft')} claimed more than the evidence shows; rewrote "
+            f"{'it' if n['rewritten'] == 1 else 'them'} from the evidence. {n['passed']} now "
+            f"{'passes' if n['passed'] == 1 else 'pass'}, {n['held']} held for you.")
 
 
 def run(description: str, product_repo: str = "", review=None, sources: list[str] | None = None,
@@ -493,7 +501,8 @@ def run(description: str, product_repo: str = "", review=None, sources: list[str
         left = checks.check_leads(store.leads(), store.STAGES)
         say(f"Reviewer: self-check found {len(left)} problems across {len(leads)} leads"
             + (f" ({', '.join(sorted({f['rule'] for f in left}))})" if left else ""))
-        say(f"Done: {len(leads)} leads scored and drafted")
+        drafted = sum(1 for l in leads if l["draft_status"] != "no_author")
+        say(f"Done: {_n(len(leads), 'person', 'people')} kept, {_n(drafted, 'message')} drafted")
     except Exception as e:  # surfaced in the UI; the run must always release the lock
         state["error"] = f"{type(e).__name__}: {e}"
         say(f"Failed: {state['error']}")

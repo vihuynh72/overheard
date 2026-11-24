@@ -69,4 +69,4 @@ def test_authorless_web_posts_get_no_draft(monkeypatch):
     assert web["name"] == "reddit.com" and web["draft_status"] == "no_author" and web["subject"] == web["body"] == ""
     assert next(l for l in leads if l["login"] == "gh1")["body"] == "Short body."
     assert asked.count(pipeline.Qualification) == 2  # no writing-rule redraft for the empty authorless draft
-    assert any(s.startswith("Writer: wrote nothing for 1 posts with no named author") for s in said)
+    assert any(s.startswith("Writer: wrote nothing for 1 post with no named author") for s in said)

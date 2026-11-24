@@ -155,10 +155,12 @@
   const TRAVEL = RM ? 1 : 700, DWELL = RM ? 1100 : 650;
   const playBtn = $("#play"), fN = $("#funnel-n"), fT = $("#funnel-t");
   let playing = false, segI = 0, segT = 0, arrived = false, last = 0, done = true;
+  let fTween = null;
   function funnel(id) {
     const f = FUNNEL[id]; if (!f) return;
-    fT.textContent = f[1];
-    if (G && !RM) { const o = {v: +fN.textContent || 0}; G.to(o, {v: f[0], duration: 0.6, ease: "power2.out", onUpdate: () => fN.textContent = Math.round(o.v)}); }
+    const same = fT.textContent === f[1];  // a new unit snaps: counting from "8 kept" down to "6 messages" would show a false "8 messages"
+    fT.textContent = f[1]; fTween?.kill();
+    if (G && !RM && same) { const o = {v: +fN.textContent || 0}; fTween = G.to(o, {v: f[0], duration: 0.6, ease: "power2.out", onUpdate: () => fN.textContent = Math.round(o.v)}); }
     else fN.textContent = f[0];
   }
   function setPlaying(on) { playing = on; playBtn.setAttribute("aria-pressed", on); $(".play-t", playBtn).textContent = on ? "Pause" : done ? "Play the run" : "Resume"; }
@@ -262,7 +264,7 @@
     if (ok(people)) { STEP.match[3] = `${people} people found describing the problem`; FUNNEL.match[0] = people; }
     if (ok(keptN)) FUNNEL.qualifier[0] = keptN;
     if (ok(keptN) && ok(dropN)) STEP.qualifier[3] = `${dropN} dropped as not a fit; ${keptN} kept`;
-    STEP.writer[3] = `${msgs} messages written`; FUNNEL.writer[0] = msgs;
+    STEP.writer[3] = `${msgs} ${msgs === 1 ? "message" : "messages"} written`; FUNNEL.writer[0] = msgs;
     // the miniature
     if (site) { $(".mini-bar").innerHTML = `Example: today&rsquo;s run on ${site}`; setT($("#mini-story .st:nth-child(1) .r-t em"), site); }
     if (rest) $(".mini-line").innerHTML = `${role.replace(/[&<]/g, "")} <em>${rest.replace(/[&<]/g, "")}</em>`;
