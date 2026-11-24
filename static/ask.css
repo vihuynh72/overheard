@@ -6,9 +6,10 @@
 .ask, .ask * { box-sizing: border-box; }
 /* In the flow of home: beside the answer on wide screens, after it on narrow ones. No box: a rule above, then the words. */
 .ask { display: flex; flex-direction: column; gap: var(--space-2); font: 400 var(--text-base)/1.5 var(--font-body); color: var(--color-ink); }
+/* The one considered object on the page: one surface, one hairline, room to read */
 .ask-card {
-  padding: var(--space-4) 0 0; border-top: 1px solid var(--color-ink);
-  opacity: 0; transform: translateX(12px);
+  padding: var(--space-6); background: var(--color-paper-2); border: 1px solid var(--color-rule); border-radius: var(--radius-md);
+  opacity: 0; transform: translateY(4px);
   transition: opacity var(--ask-dur) var(--ease-out), transform var(--ask-dur) var(--ease-out);
 }
 .ask-card.is-in { opacity: 1; transform: none; }
@@ -16,29 +17,45 @@
 .ask-card[data-kind="stop"] { border-color: var(--color-danger); }
 
 .ask-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); margin-bottom: var(--space-2); }
-.ask-kicker, .ask-progress { margin: 0; font: 500 var(--text-xs)/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); }
+.ask-kicker, .ask-progress { margin: 0; font: 500 var(--text-xs)/1.3 var(--font-mono); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--color-muted); }
 .ask-card[data-kind="stop"] .ask-kicker { color: var(--color-danger); }
 .ask-progress { font-variant-numeric: tabular-nums; }
 
+.ask-person { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-4) 0 var(--space-3); font-size: var(--text-sm); }
+.ask-person[hidden] { display: none; }
+.ask-name { font-weight: 500; }
+.ask-co { color: var(--color-muted); }
 .ask-q {
   margin: 0; max-width: 28ch;
-  font: 500 var(--text-2xl)/1.15 var(--font-display); letter-spacing: -0.015em; text-wrap: balance;
+  font: 500 var(--text-xl)/1.2 var(--font-display); letter-spacing: -0.015em; text-wrap: balance;
   overflow-wrap: anywhere;
 }
-.ask-why { margin: var(--space-3) 0 0; max-width: 60ch; color: var(--color-ink); }
+.ask-why { margin: var(--space-3) 0 0; max-width: 60ch; font-size: var(--text-sm); color: var(--color-muted); text-wrap: pretty; }
 .ask-evidence, .ask-subject {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2);
   margin: var(--space-3) 0 0; font-size: var(--text-sm); overflow-wrap: anywhere;
 }
 .ask-evidence { color: var(--color-muted); }
-.ask-label { flex: 0 0 auto; font: 500 var(--text-xs)/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-muted); }
-.ask-title { font-weight: 500; }
+.ask-label { flex: 0 0 auto; margin: 0; font: 500 var(--text-xs)/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: var(--track-label); color: var(--color-muted); }
+.ask-evidence { margin-top: var(--space-4); }
+.ask-title { flex-basis: 100%; font: 400 var(--text-base)/1.4 var(--font-display); color: var(--color-ink); quotes: "\201C" "\201D"; }
+
+/* The draft, as the letter it will be */
+.ask-letter { position: relative; margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-rule); }
+.ask-letter[hidden] { display: none; }
+.ask-letter-body { margin-top: var(--space-2); max-height: 13rem; overflow: hidden; font: 400 var(--text-sm)/1.6 var(--font-body); white-space: pre-wrap; overflow-wrap: anywhere; max-width: var(--measure); }
+.ask-letter.is-long:not(.is-open) .ask-letter-body { -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent); mask-image: linear-gradient(to bottom, #000 65%, transparent); }
+.ask-letter.is-open .ask-letter-body { max-height: none; }
+.ask-letter-subj { display: block; margin-bottom: var(--space-2); font-weight: 600; color: var(--color-ink); }
+.ask-more { display: none; margin-top: var(--space-1); min-height: 2rem; }
+.ask-letter.is-long .ask-more { display: inline-block; }
 .ask-where { flex-basis: 100%; color: var(--color-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .ask-subject-text { color: var(--color-ink); }
 .ask-why[hidden], .ask-evidence[hidden], .ask-subject[hidden] { display: none; }
 
 /* Answers */
 .ask-answers { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); }
+.ask-answers .ask-yes { flex: 1 1 auto; }
 .ask-answers[hidden], .ask-follow[hidden], .ask-btn[hidden] { display: none; }
 .ask-btn, .ask-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
@@ -59,9 +76,9 @@
 }
 .ask-card[aria-busy="true"] .ask-btn, .ask-card[aria-busy="true"] .ask-chip { opacity: 0.55; cursor: progress; }
 .ask-kbd {
-  min-width: 1.4em; padding: 0.1em 0.35em;
-  border: 1px solid currentColor; border-radius: 3px;
-  font: 500 var(--text-xs)/1 var(--font-mono); opacity: 0.7;
+  min-width: 1.5em; padding: 0.15em 0.35em 0.2em;
+  border: 1px solid currentColor; border-bottom-width: 2px; border-radius: 4px;
+  font: 500 0.6875rem/1 var(--font-mono); opacity: 0.6;
 }
 
 /* Why not? */
@@ -107,7 +124,7 @@
 @media (max-width: 44rem) {
   .ask-q { font-size: var(--text-xl); }
   .ask-answers .ask-btn { flex: 1 1 auto; padding: 0 var(--space-4); }
-  .ask-card[data-step="why"] :is(.ask-why, .ask-evidence, .ask-subject) { display: none; }  /* the reason form needs the room */
+  .ask-card[data-step="why"] :is(.ask-why, .ask-evidence, .ask-letter) { display: none; }  /* the reason form needs the room */
 }
 @media (prefers-reduced-motion: reduce) {
   .ask-card { transform: none; transition: opacity var(--dur-short) linear; }

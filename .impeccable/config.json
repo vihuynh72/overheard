@@ -4,7 +4,8 @@
       "cream-palette"
     ],
     "ignoreFiles": [
-      "static/landing.html"
+      "static/landing.html",
+      "demo/film/film.css"
     ],
     "ignoreValues": []
   }

@@ -11,7 +11,7 @@ const MOVED = {floor: "home", profile: "home", map: "leads", pipeline: "leads", 
 const EMAIL = {valid: "verified", accept_all: "domain accepts all mail", invalid: "failed verification", webmail: "personal webmail", disposable: "disposable address", unknown: "unverified", pending: "verifying"};
 
 const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", error: "", detailKey: "", shown: "", open: {},
-  head: "", ticked: new Set(), ledgerAll: false};
+  head: "", ticked: new Set(), ledgerAll: false, entered: new Set()};
 
 async function api(path, body) {
   const r = await fetch(path, body ? {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)} : {});
@@ -58,27 +58,61 @@ const vals = f => Array.isArray(f) ? f : (f?.values || []);
 const lowerFirst = t => /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
 const words = (t, n) => { const w = String(t).split(/\s+/); return w.length > n ? w.slice(0, n).join(" ") + "…" : t; };
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
-const orList = a => a.length > 1 ? a.slice(0, -1).join(", ") + " or " + a.at(-1) : a[0] || "";
+const andList = a => a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a.at(-1) : a[0] || "";
+const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+const noTag = t => String(t || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, "");  // "[BUG]: x" reads as "x"
+const initials = n => String(n || "?").replace(/^Someone on /, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "?";
+const noAuthor = l => l.draft_status === "no_author";
+const whoOf = l => noAuthor(l) ? `Someone on ${hostOf(l.url) || "the web"}` : nameOf(l);
+const EAR = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 3.5h8a1.5 1.5 0 0 1 1.5 1.5v4.5A1.5 1.5 0 0 1 12 11H8l-3 2.5V11H4a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 4 3.5Z"/></svg>`;
+// A face for every person: their GitHub avatar, else their initials; a post with no author gets a neutral speech mark.
+const avatar = l => {
+  if (noAuthor(l)) return `<span class="av av-none">${EAR}</span>`;
+  const gh = l.login && !l.login.startsWith("web:");
+  return `<span class="av"><span class="av-i" aria-hidden="true">${esc(initials(nameOf(l)))}</span>${gh ? `<img src="https://github.com/${encodeURIComponent(l.login)}.png?size=64" alt="" width="32" height="32" loading="lazy" onerror="this.remove()">` : ""}</span>`;
+};
+const favicon = d => /^[a-z0-9.-]+$/i.test(d || "") ? `<img class="fav" src="https://${d}/favicon.ico" alt="" width="16" height="16" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
+const when = d => { const t = new Date(d || ""); return isNaN(t) ? "" : t.toLocaleDateString(undefined, {month: "short", year: "numeric"}); };
+// Entrance plays once per page, on the first paint with content, never on a poll.
+const enter = k => ui.entered.has(k) ? "" : (ui.entered.add(k), " is-enter");
+const stagger = i => ` style="--i:${Math.min(i, 9)}"`;
 
+// The sentence and, beside it, the same sentence with its three load-bearing phrases (role, company kind, trigger) marked.
 function customerLine(icp) {
   const role = vals(icp.personas)[0], kind = vals(icp.industries)[0], trig = vals(icp.triggers)[0];
-  if (!role) return icp.product ? `Working out who buys ${words(icp.product.split(":")[0], 6)}.` : "Working out who your customer is.";
-  return `Your customer: ${lowerFirst(role.replace(/\s*\(.*?\)/g, ""))}${kind && !/\sat\s/i.test(role) ? ` at ${kind.replace(/\s+compan(y|ies)$/i, "")} companies` : ""}${trig ? `, ${lowerFirst(trig)}` : ""}.`;
+  if (!role) { const t = icp.product ? `Working out who buys ${words(icp.product.split(":")[0], 6)}.` : "Working out who your customer is."; return {text: t, html: esc(t)}; }
+  const parts = [cap(lowerFirst(role.replace(/\s*\(.*?\)/g, ""))), kind && !/\sat\s/i.test(role) ? kind.replace(/\s+compan(y|ies)$/i, "") : "", trig ? lowerFirst(trig) : ""];
+  // Role and company kind carry the accent; the trigger stays in ink so the eye lands on two phrases, not a whole line.
+  const build = (f, g) => `${f(parts[0])}${parts[1] ? ` at ${f(parts[1])} companies` : ""}${parts[2] ? `, ${g(parts[2])}` : ""}.`;
+  return {text: build(x => x, x => x), html: build(x => `<em>${esc(x)}</em>`, esc)};
+}
+
+// Where the answer came from, in counts the run itself reported; a number it did not report is left out.
+function provenance(d) {
+  const m = (d.status.log || []).map(l => l.match(/(\d+) of \d+ issues describe a target pain, from (\d+) people/)).find(Boolean);
+  const posts = m ? +m[1] : d.leads.reduce((n, l) => n + l.signals.length, 0), people = m ? +m[2] : d.leads.length;
+  const sites = vals(d.icp?.channels).map(c => c.domain).filter(Boolean);
+  if (!posts) return "";
+  return `<p class="prov">From <span class="num">${posts}</span> public ${posts === 1 ? "post" : "posts"}${people ? ` by <span class="num">${people}</span> ${people === 1 ? "person" : "people"}` : ""}${sites.length ? ` on ${esc(andList(sites))}` : ""}.</p>`;
 }
 
 function customerFacts(icp, leads) {
   const sigs = leads.flatMap(l => l.signals.map(s => ({...s, login: l.login})));
   const voiced = p => new Set(sigs.filter(s => s.pain === p).map(s => s.login)).size;
-  const pains = (icp.pains || []).map(p => [p, voiced(p)]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const all = [...new Set([...vals(icp.pains), ...vals(icp.learned_pains)])].map(p => [p, voiced(p)]).sort((a, b) => b[1] - a[1]);
+  const pains = (all.some(p => p[1]) ? all.filter(p => p[1]) : all).slice(0, 4), most = Math.max(1, ...pains.map(p => p[1]));
   const tally = list => Object.entries(list.reduce((m, k) => (k && (m[k] = (m[k] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const where = icp.channels?.length ? icp.channels.slice(0, 3).map(c => [c.domain, 0]) : tally(sigs.map(s => /^https?:\/\/(www\.)?github\.com\//.test(s.url) ? s.repo : hostOf(s.url)));
-  const top = [...leads].sort((a, b) => b.score - a.score);
-  const say = icp.learned_pains?.length ? icp.learned_pains.slice(0, 2) : top.slice(0, 1).flatMap(l => l.signals.slice(0, 1).map(s => s.title));
-  const fact = (k, items) => `<div class="fact"><h2>${k}</h2><ul>${items || `<li class="muted">Not known yet</li>`}</ul></div>`;
+  const where = vals(icp.channels).length ? vals(icp.channels).slice(0, 3).map(c => ({d: c.domain, why: c.why})) : tally(sigs.map(s => hostOf(s.url))).map(([d]) => ({d}));
+  // Real words only: the titles people gave their own posts, strongest match first, one per person.
+  const seen = new Set(), say = [...sigs].sort((a, b) => (b.match || 0) - (a.match || 0)).filter(s => noTag(s.title) && !seen.has(s.login) && seen.add(s.login)).slice(0, 2);
+  const by = login => leads.find(l => l.login === login);
+  const fact = (cls, k, items) => `<div class="fact ${cls}"><h2 class="label">${k}</h2><ul>${items || `<li class="muted">Not known yet</li>`}</ul></div>`;
   return `<div class="facts-row">
-    ${fact("What they struggle with", pains.map(([p, n]) => `<li>${esc(words(p, 9))}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
-    ${fact("Where they write", where.map(([d, n]) => `<li>${esc(d)}${n ? ` <span class="num muted">${n}</span>` : ""}</li>`).join(""))}
-    ${fact("In their own words", say.map(t => `<li class="quote">“${esc(words(t, 14))}”</li>`).join(""))}
+    ${fact("f-pains", "What they struggle with", pains.map(([p, n], i) => `<li${stagger(i)}><span class="pain">${esc(p)}</span>
+      <span class="voiced"><span class="voiced-bar" aria-hidden="true"><span style="--v:${(n / most).toFixed(3)}"></span></span><span class="num">${n ? plural(n, "person", "people") : "Not heard yet"}</span></span></li>`).join(""))}
+    ${fact("f-where", "Where they write", where.map(({d, why}, i) => `<li${stagger(i)}><span class="site">${favicon(d)}${esc(d)}</span>${why ? `<span class="site-why">${esc(why)}</span>` : ""}</li>`).join(""))}
+    ${fact("f-words", "In their own words", say.map((s, i) => { const l = by(s.login) || {}; return `<li class="quote"${stagger(i)}><blockquote>${esc(noTag(s.title))}</blockquote>
+      <cite>${esc(whoOf(l))}<span class="num">${esc([s.repo || hostOf(s.url), when(s.created)].filter(Boolean).join(" · "))}</span></cite></li>`; }).join(""))}
   </div>`;
 }
 
@@ -86,23 +120,27 @@ function customerFacts(icp, leads) {
 function proofPeople(leads, example) {
   if (!leads.length) return "";
   const top = [...leads].sort((a, b) => b.score - a.score).slice(0, 3);
-  return `<section class="said" aria-labelledby="said-h"><h2 id="said-h">People who said it</h2><ul>
-    ${top.map(l => { const s = l.signals[0] || {}, inner = `<span class="said-who">${esc(nameOf(l))}</span>
-      <span class="muted">${esc(l.company || "")}</span><span class="said-words">“${esc(words(s.title || l.reason, 12))}”</span>`;
-      return `<li>${example ? `<span class="said-row">${inner}</span>` : `<button type="button" class="said-row" data-open="${esc(l.login)}" data-go-leads>${inner}</button>`}
-      <a class="said-src" href="${safeUrl(s.url)}" target="_blank" rel="noopener" aria-label="Open what ${esc(nameOf(l))} wrote">${EXT}</a></li>`; }).join("")}
+  return `<section class="said" aria-labelledby="said-h"><h2 class="label" id="said-h">People who said it</h2><ul>
+    ${top.map((l, i) => { const s = l.signals[0] || {}, inner = `${avatar(l)}<span class="said-main">
+      <span class="said-who">${esc(whoOf(l))}${l.company ? ` <span class="muted">${esc(l.company)}</span>` : ""}${noAuthor(l) ? ` <span class="ev-only">evidence only</span>` : ""}</span>
+      <span class="said-words">${esc(noTag(s.title) || l.reason)}</span>
+      <span class="said-meta num">${esc([s.repo || hostOf(s.url), when(s.created)].filter(Boolean).join(" · "))}</span></span>
+      <span class="said-score num" title="Score">${esc(l.score)}</span>`;
+      return `<li${stagger(i)}>${example ? `<span class="said-row">${inner}</span>` : `<button type="button" class="said-row" data-open="${esc(l.login)}" data-go-leads>${inner}</button>`}
+      <a class="said-src" href="${safeUrl(s.url)}" target="_blank" rel="noopener" aria-label="Open what ${esc(whoOf(l))} wrote">${EXT}</a></li>`; }).join("")}
     </ul>${example ? "" : `<a class="see-all" href="#leads">See all ${leads.length}</a>`}</section>`;
 }
 
 function homeCustomer(d, example) {
   const {icp, leads, status} = d;
-  const head = status.error ? `The last run stopped: ${status.error}` : customerLine(icp || {});
+  const line = status.error ? {text: `The last run stopped: ${status.error}`} : customerLine(icp || {}), head = line.text;
   const sub = example ? "" : `<p class="home-sub">This is who Earshot thinks your customer is, based on what real people wrote. Each name links to their post.</p>`;
   const banner = example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours yet, and nothing is sent.</span><button type="button" class="linkish" data-example-off>Use my own website</button></p>` : "";
   // The headline draws in once per new answer, never on a poll that repeats it.
   const fresh = head !== ui.head; ui.head = head;
-  return `${banner}<h1 class="home-line${fresh ? " is-new" : ""}" id="home-line">${esc(head)}</h1>${sub}
-    ${icp ? customerFacts(icp, leads) : ""}${proofPeople(leads, example)}`;
+  return `<div class="answer${enter(example ? "sample" : "home")}">${banner}${status.error ? "" : `<p class="label">Your customer</p>`}<h1 class="home-line${fresh ? " is-new" : ""}" id="home-line">${line.html || esc(head)}</h1>
+    ${icp && !status.error ? provenance(d) : ""}${sub}
+    ${icp ? customerFacts(icp, leads) : ""}${proofPeople(leads, example)}</div>`;
 }
 
 // Moment 1: one promise, one field, and what will happen next.
@@ -214,12 +252,14 @@ function peopleView() {
   const filter = found > 12;
   const shown = leads.filter(l => !filter || ui.tier === "All" || l.tier === ui.tier);
   return head + (filter ? `<div class="seg" role="group" aria-label="Filter by tier">${["All", "A", "B", "C"].map(t => `<button type="button" data-tier-filter="${t}" aria-pressed="${ui.tier === t}">${t}</button>`).join("")}</div>` : "") +
-    `<ul class="people">${shown.map(l => `<li><button type="button" class="row" data-open="${esc(l.login)}">
-      <span class="score num">${l.score}</span>
-      <span class="who">${esc(nameOf(l))} ${tier(l.tier)}<small>${esc([l.role !== "unknown" && l.role, l.company].filter(Boolean).join(" · ") || (l.login.startsWith("web:") ? "" : "@" + l.login))}</small></span>
+    `<ul class="people${enter("leads")}">${shown.map((l, i) => `<li${stagger(i)}><button type="button" class="row" data-open="${esc(l.login)}">
+      ${avatar(l)}
+      <span class="who">${esc(whoOf(l))}<small>${noAuthor(l) ? "evidence only" : esc([l.role !== "unknown" && l.role, l.company].filter(Boolean).join(" · ") || (l.login.startsWith("web:") ? "" : "@" + l.login))}</small></span>
       <span class="why">${esc(l.reason)}</span>
-      <span class="stage">${esc(l.stage)}</span></button></li>`).join("") || `<li class="empty">No one in this tier.</li>`}</ul>`;
+      <span class="grade">${meter(l)}<span class="stage">${esc(l.stage)}</span></span></button></li>`).join("") || `<li class="empty">No one in this tier.</li>`}</ul>`;
 }
+// Score as a short bar with the tier letter: the number is there for a reader who wants it.
+const meter = l => { const v = Math.max(0, Math.min(100, Number(l.score) || 0)); return `<span class="meter" data-tier="${esc(l.tier)}" title="Score ${v} of 100"><span class="meter-bar" aria-hidden="true"><span style="--v:${v / 100}"></span></span><span class="meter-t">${esc(l.tier || "–")}</span><span class="num meter-n">${v}</span></span>`; };
 const backIcon = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>`;
 
 function detail() {
@@ -231,7 +271,7 @@ function detail() {
   ui.detailKey = key;
   if (!l) { el.innerHTML = ""; return; }
   const done = l.draft_status !== "pending";
-  el.innerHTML = `<h2>${esc(nameOf(l))} ${tier(l.tier)}</h2>
+  el.innerHTML = `<div class="detail-head">${avatar(l)}<h2>${esc(whoOf(l))} ${tier(l.tier)}</h2></div>
     <p class="facts"><a href="${safeUrl(l.url)}" target="_blank" rel="noopener">${l.url.startsWith("https://github.com/") ? "GitHub" : "Where they posted"}${EXT}</a>
       ${l.company ? `<span>${esc(l.company)}</span>` : ""}
       <span>${l.email ? esc(l.email) + " · " + esc(EMAIL[l.email_status] || "unverified") : "No email"}</span>
@@ -255,13 +295,22 @@ function detail() {
 }
 
 const LEVELS = ["shadow", "supervised", "autopilot"];  // mirrors app/trust.py
+const GOOD = `<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="m6 10.5 2.7 2.7L14.2 7.5"/></svg>`;
+const WAIT = `<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6.5 10h7"/></svg>`;
 function trustBlock(trust) {
   const gates = trust.gates || [], met = gates.filter(g => g.passed).length, level = String(trust.level || "unknown");
   const i = LEVELS.indexOf(level), up = i >= 0 && i < LEVELS.length - 1 ? LEVELS[i + 1] : null, target = up || (i > 0 ? LEVELS[i - 1] : null);
   const why = level === "autopilot" ? "Earshot may send on its own while every check holds." : (trust.blocked_by || []).length ? `Autopilot is not available yet: ${trust.blocked_by.join("; ")}.` : met === gates.length && gates.length ? "Every check holds; you can ask for more autonomy." : "Autopilot waits until every check passes.";
   return fold("trust", "Trust", `${esc(level[0].toUpperCase() + level.slice(1))} · <span class="num">${met} of ${gates.length}</span> checks passed`,
-    `<ul class="ruled">${gates.map(g => `<li class="gate"><span>${esc(g.label)}</span><span class="num muted">${esc(g.value ?? "–")}</span><span class="${g.passed ? "ok" : "no"}">${g.passed ? "Passed" : "Not yet"}</span></li>`).join("")}</ul>
-     <p class="muted">${esc(why)}</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up ? "Request " : "Step back to "}${target}</button></div>` : ""}`, true);
+    `<ul class="gates">${gates.map(g => `<li class="gate" data-passed="${!!g.passed}"><span class="gate-mark" aria-hidden="true">${g.passed ? GOOD : WAIT}</span><span class="gate-label">${esc(g.label)}<span class="visually-hidden">: ${g.passed ? "passed" : "not yet"}</span></span><span class="gate-val">${esc(g.value ?? "–")}</span></li>`).join("")}</ul>
+     <p class="gate-say">${esc(why)}</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up ? "Request " : "Step back to "}${target}</button></div>` : ""}`, true);
+}
+
+// One large number, and a thin bar of what this ledger spent against what is left.
+function creditsHead(b, rows) {
+  const spent = rows.reduce((n, e) => n + (e.ok ? Number(e.credits) || 0 : 0), 0), left = Math.max(0, b.credits), all = spent + left;
+  return `<div class="credits"><p class="credits-n num">${left.toFixed(1)}<span>credits left</span></p>
+    ${all ? `<div class="usage" role="img" aria-label="${spent.toFixed(1)} spent, ${left.toFixed(1)} left"><span style="--v:${(spent / all).toFixed(3)}"></span></div><p class="usage-say num">${spent.toFixed(1)} spent in this ledger</p>` : ""}</div>`;
 }
 
 function activityView() {
@@ -279,7 +328,7 @@ function activityView() {
   return trustBlock(floor?.trust || {}) +
     fold("run", "Last run", status.running ? "Running" : status.log.length ? plural(status.log.length, "step", "steps") : "None yet", status.log.length ? steps() : `<p class="muted">No run yet.</p>`, status.log.length <= 8) +
     fold("credits", "Credits", `<span class="num">${billing.credits.toFixed(1)}</span> left`,
-      `<p class="muted">${billing.mode === "flexprice" ? "Metered by Flexprice." : "Local wallet."} A lead costs ${billing.costs["lead.enriched"]}, a sent message ${billing.costs["outreach.sent"]}.</p>
+      `${creditsHead(billing, rows)}<p class="muted">${billing.mode === "flexprice" ? "Metered by Flexprice." : "Local wallet."} A lead costs ${billing.costs["lead.enriched"]}, a sent message ${billing.costs["outreach.sent"]}.</p>
        ${billing.mode === "local" ? `<div class="actions"><button type="button" class="btn quiet" data-topup="20">Add 20 credits</button></div>` : ""}${ledger}`, rows.length <= cap) +
     fold("audit", "Sent and decisions", `${plural(events.length, "decision", "decisions")} · ${plural(checks.length, "finding", "findings")}`, audit, events.length + checks.length <= 6);
 }

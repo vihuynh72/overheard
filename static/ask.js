@@ -25,12 +25,12 @@ window.EarshotAsk = (() => {
     s = String(s || "").replace(/\s+/g, " ").trim();
     const m = s.match(/^.+?[.!?](?=\s|$)/);
     s = m ? m[0] : s;
-    return s.length > 180 ? s.slice(0, 177).replace(/\s+\S*$/, "") + "..." : s;
+    return s.length > 320 ? s.slice(0, 317).replace(/\s+\S*$/, "") + "..." : s;
   };
   const dur = () => reduced.matches ? 0 : 240;
 
   // --- the surface, built once ---
-  let note, firstLead = true, root, card, kicker, progress, question, why, evidence, subject, answers, yesB, noB, laterB,
+  let note, firstLead = true, root, card, kicker, progress, person, question, why, evidence, subject, answers, yesB, noB, laterB,
     follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume;
   function build() {
     root = el("section", "ask");
@@ -40,12 +40,13 @@ window.EarshotAsk = (() => {
     kicker = el("p", "ask-kicker");
     progress = el("p", "ask-progress");
     top.append(kicker, progress);
+    person = el("p", "ask-person");
     question = el("p", "ask-q");
     question.id = "ask-q";
     question.setAttribute("aria-live", "polite");
     why = el("p", "ask-why");
     evidence = el("p", "ask-evidence");
-    subject = el("details", "ask-read");
+    subject = el("div", "ask-letter");
     note = el("p", "ask-note", "Yes sends this message. In this demo it goes to a test inbox, never to the person.");
 
     answers = el("div", "ask-answers");
@@ -81,7 +82,7 @@ window.EarshotAsk = (() => {
 
     errorP = el("p", "ask-error");
     errorP.setAttribute("role", "alert");
-    card.append(top, question, why, evidence, subject, note, answers, follow, errorP);
+    card.append(top, person, question, why, evidence, subject, note, answers, follow, errorP);
 
     idle = el("p", "ask-idle", "Nothing needs you");
     resume = el("button", "ask-resume");
@@ -126,11 +127,12 @@ window.EarshotAsk = (() => {
     const when = sig && sig.created ? new Date(sig.created) : null;
     const whenText = when && !isNaN(when) ? when.toLocaleDateString(undefined, {month: "short", year: "numeric"}) : "";
     return {
-      key: "lead:" + l.login, kind: "lead", login: l.login, yesno: true,
+      key: "lead:" + l.login, kind: "lead", login: l.login, yesno: true, name, company,
+      face: l.login && !l.login.startsWith("web:") ? `https://github.com/${encodeURIComponent(l.login)}.png?size=64` : "",
       kicker: "Your decision",
-      q: `Write to ${name}${company ? " at " + company : ""}?`,
+      q: `Write to ${name}?`,
       why: sentence(l.reason),
-      evidence: sig ? [sig.title, [sig.repo, whenText].filter(Boolean).join(", ")] : null,
+      evidence: sig ? [String(sig.title || "").replace(/^\s*\[[A-Za-z ]+\]:?\s*/, ""), [sig.repo, whenText].filter(Boolean).join(", ")] : null,
       subject: l.subject || "", body: l.body || "",
       reasons: reasonsFor(l, company),
     };
@@ -238,6 +240,8 @@ window.EarshotAsk = (() => {
       render(item);
       card.hidden = false;
       root.dataset.state = "open";
+      const body = subject.querySelector(".ask-letter-body");
+      if (body) subject.classList.toggle("is-long", body.scrollHeight > body.clientHeight + 4);
       void card.offsetWidth;                      // commit the start state so the arrival animates
       card.classList.add("is-in");
       if (hadFocus) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
@@ -251,22 +255,34 @@ window.EarshotAsk = (() => {
   function render(item) {
     kicker.textContent = item.kicker;
     progress.textContent = item.kind === "lead" ? progressText() : "";
+    person.replaceChildren();
+    person.hidden = item.kind !== "lead";
+    if (item.kind === "lead") {
+      const av = el("span", "av");
+      av.append(el("span", "av-i", String(item.name).split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("")));
+      if (item.face) { const img = el("img"); Object.assign(img, {src: item.face, alt: "", width: 32, height: 32, loading: "lazy"}); img.onerror = () => img.remove(); av.append(img); }
+      person.append(av, el("span", "ask-name", item.name));
+      if (item.company) person.append(el("span", "ask-co", item.company));
+    }
     question.textContent = item.q;
     why.textContent = item.why || "";
     why.hidden = !item.why;
     evidence.replaceChildren();
     evidence.hidden = !item.evidence;
     if (item.evidence) {
-      evidence.append(el("span", "ask-label", "They wrote"), el("span", "ask-title", item.evidence[0]));
+      evidence.append(el("span", "ask-label", "They wrote"), el("q", "ask-title", item.evidence[0]));
       if (item.evidence[1]) evidence.append(el("span", "ask-where", item.evidence[1]));
     }
+    // The draft is shown as the letter it will be, so the decision is made on what will be sent.
     subject.replaceChildren();
-    subject.open = false;
     subject.hidden = !item.subject;
+    subject.classList.remove("is-open", "is-long");
     if (item.subject) {
-      const msg = el("div", "ask-read-body");
-      msg.append(el("strong", "", item.subject), document.createTextNode(item.body || ""));
-      subject.append(el("summary", "", "Read the message"), msg);
+      const msg = el("div", "ask-letter-body");
+      msg.append(el("strong", "ask-letter-subj", item.subject), el("span", "", item.body || ""));
+      const more = button("ask-link ask-more", "Read all");
+      more.addEventListener("click", () => { subject.classList.add("is-open"); more.remove(); });
+      subject.append(el("p", "ask-label", "The message"), msg, more);
     }
     note.hidden = !(item.kind === "lead" && firstLead);
     if (item.kind === "lead") firstLead = false;
