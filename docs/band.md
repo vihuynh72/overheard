@@ -63,7 +63,7 @@ For a 90-second video, record the run in advance and cut it down to steps 2, 3 a
 ## What was actually run (2026-11-24)
 
 1. **Read-only checks.** `band version` showed CLI and hub at 0.70.0. `repos`, `worktrees`, `agents --all`, `groups` and `cronjobs` were all empty. One worker, `local`, is online with agents claude-code, codex and opencode.
-2. **`band repos add <this repo>`** registered `hackwithbay` (git, origin github.com/vihuynh72/hackwithbay, checkpoints on). The main checkout became worktree `hackwithbay-main`.
+2. **`band repos add <this repo>`** registered `hackwithbay` (git, origin github.com/vihuynh72/overheard, checkpoints on). The main checkout became worktree `hackwithbay-main`.
    - `band agents list --all` then showed the two Claude Code sessions already running in the main checkout, one of which was the session doing this work.
 3. **`band worktrees create hackwithbay feat/band-author-gate`** created worktree `hackwithbay-feat-band-author-gate` at `~/.band/worktrees/hackwithbay/feat/band-author-gate`. It contains only `README.md`, because only the initial commit exists and all the app code is uncommitted.
    - Band also created a default pane named `Chat` automatically.

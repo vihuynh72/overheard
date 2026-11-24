@@ -31,7 +31,7 @@ Autonomy is earned. Overheard may release messages alone only after its calls ha
 ## Links
 
 - Deployment: https://earshot-production.up.railway.app
-- Repository: https://github.com/vihuynh72/hackwithbay
+- Repository: https://github.com/vihuynh72/overheard
 - Design document: docs/architecture.md
 - Band proof: docs/band-run.md
 - Demo video: demo/earshot-demo.mp4 (upload and paste link)
