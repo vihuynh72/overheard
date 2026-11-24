@@ -649,6 +649,7 @@ function activityView() {
   const run = status.running ? `<p class="sub" style="margin:0 0 var(--space-12)"><em>Running now.</em></p>` : !log.length ? `<p class="muted" style="margin:0 0 var(--space-12)">No run yet.</p>` : "";
   return run + steps.map((s, k) => block(`step-${k + 1}`, `0${k + 1} · ${NAMES[k]}`, s.t, `${s.n ? `<p class="sub" style="margin:0 0 var(--space-6)">${s.n}</p>` : ""}${logRows(k)}${extra[k]}`)).join("") +
     (d.map ? block("graph", "The graph", "What the <em>map</em> shows", graphRows(d)) : "") +
+    numbersBlock(d, block) +
     block("trust", "Trust", `${esc(LEVEL_SAYS[level] || cap(level))} · <em>${met} of ${gates.length}</em>`,
       `<ul class="rows">${gates.map(g => `<li><div class="r"><span class="r-k">${g.passed ? TICK : "–"}</span><span class="r-t">${esc(GATE_SAYS[g.key] || g.label)}<span class="visually-hidden">: ${g.passed ? "true" : "not yet"}</span></span><span class="r-n">${esc(gateVal(g))}</span></div></li>`).join("")}</ul>
        <p class="sub">Overheard may send on its own only when all five of these are true.</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up === "autopilot" ? "Ask to send on its own" : up ? "Let it draft for you" : "Go back to approving each"}</button></div>` : ""}`) +
@@ -657,6 +658,66 @@ function activityView() {
        ${rows.length ? `<ul class="rows">${shown.map(e => `<li><div class="r ledger"><span class="r-k">${esc(String(e.ts).slice(11, 19))}</span><span class="r-t">${esc(SPEND[e.event] || e.event)}${e.ok ? "" : " (not recorded)"}${e.lead ? ` <i>${esc(inLine(person(e.lead)))}</i>` : ""}</span><span class="r-n">${Number(e.credits).toFixed(1)}</span></div></li>`).join("")}</ul>
        ${rows.length > capN && !ui.ledgerAll ? `<p class="center"><button type="button" class="pill" data-ledger-all>See all ${rows.length} <span aria-hidden="true">⌄</span></button></p>` : ""}` : `<p class="muted">No spend yet.</p>`}
        ${billing.mode === "local" ? `<div class="actions"><button type="button" class="btn quiet" data-topup="20">Add 20 credits</button></div>` : ""}`);
+}
+// The run, measured: every figure is counted from the state, and a row whose inputs are missing is left out.
+function numbersRows(d) {
+  const log = d.status.log || [], leads = d.leads || [], kept = leads.filter(l => !noAuthor(l)), n = kept.length;
+  const find = re => { for (const l of log) { const m = l.match(re); if (m) return m; } return null; };
+  const one = x => (+x).toFixed(1), pct = (a, b) => Math.max(0, Math.min(100, b ? a / b * 100 : 0));
+  const row = (k, w, v, title) => `<span class="conv-row"${title ? ` title="${esc(title)}"` : ""}><span>${esc(k)}</span><span class="bar" aria-hidden="true"><i style="width:${w}%"></i></span><span class="num">${v}</span></span>`;
+  const conv = rows => `<span class="conv conv-w">${rows.join("")}</span>`, small = t => `<small class="muted">${t}</small>`;
+  const out = [];
+  // 1. posts to people
+  const scan = find(/(\d+) of (\d+) issues describe a target pain, from (\d+) people/), top = find(/passing the top (\d+)/);
+  const posts = postsRead(log) || (scan ? +scan[2] : 0), msgs = kept.filter(l => l.body).length;
+  if (posts && n) {
+    const steps = [["Posts read", posts], scan && ["People describing the problem", +scan[3]], top && ["Passed to the Qualifier", +top[1]], ["Kept", n], ["Messages written", msgs]].filter(Boolean);
+    out.push(fact("From posts to people", conv(steps.map(([k, v]) => row(k, Math.sqrt(v / posts) * 100, v, "Bar lengths are scaled (square root) so small numbers stay visible"))) + small(`${one(n / posts * 100)} in every 100 posts became a person worth writing to`)));
+  }
+  // 2. sources
+  const srcs = new Map();
+  kept.forEach(l => { const s = srcOf(l), k = ["GitHub", "Hacker News", "Reddit"].includes(s) ? s : "Other site", c = srcs.get(k) || [0, 0]; c[0]++; if (l.email_status === "valid") c[1]++; srcs.set(k, c); });
+  const ver = kept.filter(l => l.email && l.email_status === "valid").length;
+  if (n) out.push(fact("Where they came from", conv([...srcs].sort((a, b) => b[1][0] - a[1][0]).map(([k, c]) => row(k, pct(c[0], n), c[0]))) +
+    (ver ? small([...srcs].map(([k, c]) => `${esc(k)}: ${c[1]} of ${c[0]} with a verified email`).join(" · ")) : "")));
+  // 3. fit
+  const scores = kept.map(l => +l.score).filter(x => isFinite(x)), tiers = ["A", "B", "C"].map(t => [t, kept.filter(l => l.tier === t).length]);
+  if (n && tiers.some(t => t[1])) out.push(fact("By fit", conv(tiers.map(([t, k]) => row(TIER[t], pct(k, n), k, `Tier ${t}`))) + (scores.length ? small(`Average score ${one(scores.reduce((a, b) => a + b, 0) / scores.length)} of 100`) : "")));
+  // 4. company
+  const co = kept.filter(l => l.company).length;
+  if (co >= 2) out.push(fact("By company", conv([row("Company known", pct(co, n), co), row("Unknown", pct(n - co, n), n - co)]) + small("Industry is known for the customer profile, not per person, so results are not split by industry.")));
+  // 5. second opinion
+  const chk = find(/^Reviewer: checked (\d+) drafts?.*; (\d+) makes? a claim/), rw = find(/^Reviewer → Writer: (\d+) drafts? claimed more.*?(\d+) now pass(?:es)?, (\d+) held/), rm = find(/^Reviewer: removed (\d+) sentences? stating a number/);
+  if (chk) { const c = +chk[1], f = +chk[2];
+    out.push(fact("The second opinion", conv([row("Drafts checked", 100, c), row("Flagged", pct(f, c), f), ...(rw ? [row("Rewritten", pct(+rw[1], c), +rw[1]), row("Passed after rewrite", pct(+rw[2], c), +rw[2]), row("Held for you", pct(+rw[3], c), +rw[3])] : []), ...(rm ? [row("Sentences removed", 0, +rm[1])] : [])]) +
+      (rw && f ? small(`${+rw[2]} of ${f} fixed automatically`) : ""))); }
+  // 6. contact
+  const looked = kept.filter(l => l.enrich || l.email).length, acc = kept.filter(l => l.email && l.email_status === "accept_all").length, none = kept.filter(l => !l.email).length;
+  if (n) out.push(fact("Contact", conv([row("People looked up", pct(looked, n), looked), row("Verified by Hunter", pct(ver, n), ver), row("Accept-all", pct(acc, n), acc), row("Not found", pct(none, n), none)])));
+  // 7. cost
+  const start = runStart(d), ledger = (d.billing?.ledger || []).filter(e => e.ok && (!start || Date.parse(e.ts) >= start)), by = new Map();
+  ledger.forEach(e => { const c = by.get(e.event) || [0, 0]; c[0]++; c[1] += Number(e.credits || 0); by.set(e.event, c); });
+  const spent = spentSince(d, start), total = ledger.reduce((a, e) => a + Number(e.credits || 0), 0);
+  if (ledger.length) out.push(fact("Cost", conv([...(start ? [row("Credits used this run", 100, one(spent))] : []), ...[...by].map(([ev, c]) => row(`${SPEND[ev] || ev} × ${c[0]}`, pct(c[1], total), one(c[1])))]) +
+    small(start ? (n && spent ? `${one(spent / n)} credits per kept person${msgs ? ` · ${one(spent / msgs)} per message` : ""}` : "") : "The run's start time is no longer in memory, so this is everything in the ledger, not this run alone.")));
+  // 8. stages: a rate appears only when someone has moved past the stage
+  const stages = d.stages || [], at = stages.map(s => leads.filter(l => l.stage === s).length), last = stages.length - 1;
+  const reached = i => at.slice(i, last).reduce((a, b) => a + b, 0);  // the closing stage is an end, not a step on
+  if (stages.length && leads.length) out.push(fact("Stages", conv(stages.map((s, i) => { const on = i < last - 1 ? reached(i + 1) : 0;
+    return row(s, pct(at[i], leads.length), `${at[i]} <span class="muted">· ${on ? `${Math.round(on / reached(i) * 100)}% went on` : "—"}</span>`); })) + small("Nothing has been sent to a real person in this demo, so replies and meetings are zero by design.")));
+  // 9. time
+  const di = log.findIndex(l => /^Done:/.test(l)), end = di >= 0 ? tsOf(d, di) : null;
+  if (start && end) { const firsts = STEP_OF.map(re => { const i = log.findIndex(l => re.test(l)); return i >= 0 ? tsOf(d, i) : null; }), NAMES = ["Read", "Listened", "Found", "Kept", "Wrote and reviewed"];
+    const spans = firsts.map((t, k) => t ? [NAMES[k], (firsts.slice(k + 1).find(Boolean) || end) - t] : null).filter(Boolean).sort((a, b) => b[1] - a[1]);
+    out.push(fact("Time", `<span class="num">${dur(end - start)}</span>${spans.length ? small(`Slowest step: ${esc(spans[0][0])}, ${dur(spans[0][1])}`) : ""}`)); }
+  return out;
+}
+function numbersBlock(d, block) {
+  try {
+    if (ui.example || !(d.leads || []).length) return "";
+    const rows = numbersRows(d);
+    return rows.length ? block("numbers", "The numbers", "This run, <em>measured</em>", `<p class="sub" style="margin:0 0 var(--space-6)">Everything here is counted from this run. Nothing is estimated.</p><ul class="rows facts-rows">${rows.join("")}</ul>`) : "";
+  } catch (e) { return ""; }  // a parsing surprise shows nothing rather than breaking Activity
 }
 // Findings computed from the map's edges; each is skipped when the data does not show it.
 function graphRows(d) {

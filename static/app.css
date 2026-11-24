@@ -254,6 +254,10 @@ a.r:hover, button.r:hover { background: rgba(255, 255, 255, 0.55); }
 .live .st-lines { margin-top: var(--space-3); max-height: 20rem; overflow-y: auto; }
 .conv { max-width: 28rem; }
 .conv-row .bar { width: 100%; }
+/* The numbers: longer labels and wider figures than the stage bars. */
+.conv-w { max-width: 34rem; }
+.conv-w .conv-row { grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) minmax(2rem, auto); }
+.conv-w + small { display: block; margin-top: var(--space-2); }
 
 /* The label is one phrase: the pill gap must not add a second space before its hidden-on-narrow half. */
 .nav .nav-cta { gap: 0; }
