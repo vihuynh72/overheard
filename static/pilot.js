@@ -7,7 +7,7 @@
   // Controls that spend money or carry a decision that belongs to the human or to the gated Sender.
   var DENY = "[data-act], [data-topup], form#intake button, form#intake-manual button, [data-stage], .floor-trust .floor-control, .ask";
   var DENY_WORDS = /^\s*(approve|reject|request|add|find|send|(yes|no|later)\b)/i; // prefix, so "Requesting" and "Adding" are caught too
-  var STORE_KEY = "earshot.pilot";
+  var STORE_KEY = "earshot.pilot-2";
   var IDLE_RESUME_MS = 8000;
   var PATROL_AFTER_MS = 9000;
   var WAIT_MS = 4000;
