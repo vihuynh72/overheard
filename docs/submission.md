@@ -4,19 +4,19 @@ Ready to paste into the HackwithBay 4.0 form.
 
 ## Project name
 
-Earshot
+Overheard
 
 ## One line (under 140 characters)
 
-Earshot finds people who describe your product's problem in public, quotes what they wrote, and drafts a message you approve.
+Overheard finds people who describe your product's problem in public, quotes what they wrote, and drafts a message you approve.
 
 ## Description for judges
 
-Outbound fails because the sender does not know whether this person has this problem now. Earshot starts from that fact. You give it your website. It works out who your buyers are and where they write, then reads public GitHub issues and forum posts and matches them by meaning to the problems your product solves. Every lead links to the exact post the person wrote.
+Outbound fails because the sender does not know whether this person has this problem now. Overheard starts from that fact. You give it your website. It works out who your buyers are and where they write, then reads public GitHub issues and forum posts and matches them by meaning to the problems your product solves. Every lead links to the exact post the person wrote.
 
 For each person it drafts a short message that answers what they said. A second model checks every claim in the draft against the post. A code check cuts any number the person never wrote. Nothing is sent without your approval, and in this build no message reaches a lead at all. It goes to your own inbox or a test inbox.
 
-Autonomy is earned. Earshot may release messages alone only after its calls have matched yours, and one release you would have stopped switches it off. When your buyers do not write in public, it says so and stops.
+Autonomy is earned. Overheard may release messages alone only after its calls have matched yours, and one release you would have stopped switches it off. When your buyers do not write in public, it says so and stops.
 
 ## How it maps to the rubric
 
@@ -51,4 +51,4 @@ Autonomy is earned. Earshot may release messages alone only after its calls have
 
 ## What is next
 
-First, sign-in and a persistent volume, so the public copy is safe to leave open and results survive a redeploy. Second, reply tracking, so Earshot learns from what happens after a message and not only from your approvals. Third, finishing Gmail sending and finding out why feature-flag and logging products returned no leads.
+First, sign-in and a persistent volume, so the public copy is safe to leave open and results survive a redeploy. Second, reply tracking, so Overheard learns from what happens after a message and not only from your approvals. Third, finishing Gmail sending and finding out why feature-flag and logging products returned no leads.

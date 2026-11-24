@@ -50,8 +50,8 @@ def main() -> None:
     if not key:
         die("FLEXPRICE_API_KEY is not set")
     with httpx.Client(headers={"x-api-key": key}, timeout=20) as c:
-        plan = find_or_create(c, "plan Earshot Credits", "/plans/search", {"lookup_key": PLAN_KEY},
-                              "/plans", {"name": "Earshot Credits", "lookup_key": PLAN_KEY,
+        plan = find_or_create(c, "plan Overheard Credits", "/plans/search", {"lookup_key": PLAN_KEY},
+                              "/plans", {"name": "Overheard Credits", "lookup_key": PLAN_KEY,
                                          "description": "Usage-priced plan drawn from a prepaid wallet"})
         for event, (name, amount) in EVENTS.items():
             feat = find_or_create(

@@ -1,12 +1,12 @@
-# Earshot
+# Overheard
 
-Earshot is a line of seven agents that finds people describing a problem in public, drafts a message that answers what they wrote, and holds it for the founder's approval. It is for a founder at a small or mid-sized company who sells to developers and has no list of target accounts. Every lead links to the post the person wrote, and in this build no message ever reaches a lead.
+Overheard is a line of seven agents that finds people describing a problem in public, drafts a message that answers what they wrote, and holds it for the founder's approval. It is for a founder at a small or mid-sized company who sells to developers and has no list of target accounts. Every lead links to the post the person wrote, and in this build no message ever reaches a lead.
 
 Built for HackwithBay 4.0 (San Francisco, 24 November 2026). Live copy: <https://earshot-production.up.railway.app>. Design document: [docs/architecture.md](docs/architecture.md). Decision history with reasons: [docs/log.md](docs/log.md). Band: [docs/band.md](docs/band.md) and the record of a real run, [docs/band-run.md](docs/band-run.md). Text for the submission form: [docs/submission.md](docs/submission.md).
 
 ## The idea
 
-Most outbound tools start from a list of companies and then invent a reason to write. Earshot starts from a person's own public words about a problem. The Planner reads your site and decides who your buyers are and where they write (channels and process areas). The Scout reads public GitHub issues on your product's tracker and on your open-source competitors' trackers, and (with a Tavily key) forum and review-site posts from those channels. It matches posts by meaning to pain statements inferred from your product, then learns up to three more pain statements from the best real posts, in one extra round. It drops posts written by sellers, keeps the author, and quotes the post next to the draft.
+Most outbound tools start from a list of companies and then invent a reason to write. Overheard starts from a person's own public words about a problem. The Planner reads your site and decides who your buyers are and where they write (channels and process areas). The Scout reads public GitHub issues on your product's tracker and on your open-source competitors' trackers, and (with a Tavily key) forum and review-site posts from those channels. It matches posts by meaning to pain statements inferred from your product, then learns up to three more pain statements from the best real posts, in one extra round. It drops posts written by sellers, keeps the author, and quotes the post next to the draft.
 
 Autonomy is earned from evidence, not toggled. The Sender can release a message without a per-message click only when five gates pass: a clean self-check, at least 90% agreement over at least 8 judged decisions, no release you would have stopped, a simulation that finds relevant leads, and no fixed mistake that came back. The agreement gate judges only calls that could do harm (an agreed call, or a release you rejected); a lead the agent held and you approved is reported but does not count against it. If an enforced gate fails, autopilot is switched off by code. See [docs/architecture.md](docs/architecture.md#5-trust-model).
 
@@ -16,7 +16,7 @@ The landing page is `/`. The app is `/app`: a paper-coloured page with three tex
 
 - **Arrival.** One field: your website. A GitHub repository or a typed description also work, behind "Describe it yourself instead". An example mode shows a finished result for a sample product without spending anything.
 - **Progress.** While a run goes, a five-step checklist in plain words replaces the raw log.
-- **Customer.** Who Earshot decided your buyer is, in plain language, and the evidence for it. If the method cannot work for your product, it says so here and stops.
+- **Customer.** Who Overheard decided your buyer is, in plain language, and the evidence for it. If the method cannot work for your product, it says so here and stops.
 - **People.** The ranked leads. Choose one to see what they wrote (linked, with the pain it matched), why they were kept, their contact steps and email status, and the draft. A single question card is the only place you act: approve, edit or reject. A rejection reason can become a standing rule.
 - **Activity.** The run's steps and self-check findings, the autonomy level and which gates block it, the sending setup (Connect Gmail, or Resend), and the credit balance with a per-event ledger and a top-up.
 
@@ -34,7 +34,7 @@ An MCP server is mounted at `/mcp` on the same app, with six tools, all read-onl
 | `run_status` | Whether a run is going, its error, the last 12 steps. |
 | `list_leads` | The people found, best first, with the strongest evidence for each. |
 | `get_lead` | One lead in full: every post, the draft, the contact, why it is held. |
-| `customer_profile` | Who Earshot decided to look for, and whether the method fits. |
+| `customer_profile` | Who Overheard decided to look for, and whether the method fits. |
 | `trust` | The autonomy level and which gates block it. |
 
 Approving, rejecting, autopilot, credits and sending are deliberately not exposed: an agent connecting here is an automated caller, and those are the founder's decisions or spend money. Connect Claude Code to the live copy:
@@ -76,7 +76,7 @@ These are all the variables the code reads. `.env` is loaded by `app/main.py` at
 | `LOCAL_CREDITS` | Starting balance of the local wallet. Default 60. | Yes. |
 | `RESEND_API_KEY` | Sending through Resend. | Yes. Approving records the decision and the activity log says "not sent (no RESEND_API_KEY)". |
 | `DEMO_INBOX` | Where redirected messages go. Default `delivered@resend.dev`, Resend's test address. | Yes. |
-| `MAIL_FROM` | Sender on Resend messages. Default `Earshot <onboarding@resend.dev>`. | Yes. |
+| `MAIL_FROM` | Sender on Resend messages. Default `Overheard <onboarding@resend.dev>`. | Yes. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client, so the founder can send through their own Gmail (`gmail.send` scope only). | Yes. The Connect Gmail button is replaced by a hint. |
 | `GOOGLE_REDIRECT_URI` | OAuth callback. Default `http://localhost:8765/api/gmail/callback`. Set it to the public URL when deployed, and register the same URL in Google. | Yes, for local use. |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | Spoken replies from `/api/speak`, which the interface no longer calls. | Yes. `/api/speak` returns 503. |
@@ -162,7 +162,7 @@ The graph (`data/graph.kuzu`) and the other state files (`data/autopilot.json`, 
 - **No sign-in on the public copy.** Anyone who can reach the URL can start a run, approve, reject and top up local credits. The one mitigation is the run budget: at most `MAX_RUNS_PER_HOUR` (6) starts in a rolling hour and `MIN_RUN_GAP_SECONDS` (20) between them, enforced in the one function the web route and the MCP tool both use. It limits spend. It is not authentication, and the budget lives in memory, so a restart resets it.
 - **Railway storage is ephemeral.** A redeploy clears the graph, the autopilot state, the lessons and the customer profile. Results shown to a judge come from a run made on that deployment.
 - **Forum authors usually cannot be identified.** Only Reddit user URLs and X status URLs yield a handle. Every other web lead has no named author, so it is held in every mode and is evidence only: there is nobody to write to. Web leads also get no contact lookup.
-- **The method declines some products.** If a product's buyers do not write about problems in public, Earshot says so at intake and stops. In the simulation, four of ten products (a payroll product, a habit app, a window cleaner, a vague description) are refused for this reason, which is the intended result. Two developer-tool products (feature flags, logging) returned nothing after the stricter filter, and I have not found out why.
+- **The method declines some products.** If a product's buyers do not write about problems in public, Overheard says so at intake and stops. In the simulation, four of ten products (a payroll product, a habit app, a window cleaner, a vague description) are refused for this reason, which is the intended result. Two developer-tool products (feature flags, logging) returned nothing after the stricter filter, and I have not found out why.
 - **The demo video's progress screen is a replay.** It replays the log of a real run. It is not a live run recorded in one take.
 - **Gmail sending is coded but not finished.** The Google console setup was not completed, so the sign-in was never run against Google. Resend to a test inbox is what actually runs. Gmail is tested only against faked HTTP, and its tokens live in memory.
 - **People, not companies, and email only.** Leads are individuals from public posts. Most list no company, so few get a business email. LinkedIn URLs come from Hunter and are shown, but there is no LinkedIn outreach.

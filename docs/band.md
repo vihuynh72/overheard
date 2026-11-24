@@ -42,7 +42,7 @@ Band (CLI and hub 0.70.0) is a desktop app plus a local hub (`http://localhost:3
 
 ## The demo in six steps
 
-The task is a real Earshot rule: a web lead with no named author is never released. It belongs in `app/policy.py` `decide()`. It changes what Earshot may send, so a human must approve it.
+The task is a real Overheard rule: a web lead with no named author is never released. It belongs in `app/policy.py` `decide()`. It changes what Overheard may send, so a human must approve it.
 
 1. **Setup.** Run `scripts/band/demo.sh`. The judge sees one worktree, `feat/band-author-gate`, in the Band sidebar. It has four panes labelled Planner, Builder, Reviewer and Security.
 2. **Planner.** It reads the policy code and writes an eight-line plan that ends with `HUMAN DECISION`. It then tries to run `band chats send <Builder>`. The judge sees the Planner pane stop on a Yes/No prompt that shows that exact command.
@@ -101,4 +101,4 @@ For a 90-second video, record the run in advance and cut it down to steps 2, 3 a
    - `band worktrees remove hackwithbay feat/band-author-gate`
    - `band repos remove hackwithbay`
 
-The script reads and writes no Earshot project data. Its only local effect is a fast-forward merge inside the Band worktree.
+The script reads and writes no Overheard project data. Its only local effect is a fast-forward merge inside the Band worktree.

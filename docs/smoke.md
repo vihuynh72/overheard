@@ -1,6 +1,6 @@
 # Smoke test
 
-`scripts/smoke.py` runs 16 read-only checks against any Earshot deployment: pages and static assets, the shape of `/api/state`, the evidence rules on every lead (cited, scored 0-100, staged, no draft on a web lead), trust gates, billing, graph, the six MCP tools, and live evidence links. It proves the deployment is up, serves the contracts the product claims, and every lead links to a real page.
+`scripts/smoke.py` runs 16 read-only checks against any Overheard deployment: pages and static assets, the shape of `/api/state`, the evidence rules on every lead (cited, scored 0-100, staged, no draft on a web lead), trust gates, billing, graph, the six MCP tools, and live evidence links. It proves the deployment is up, serves the contracts the product claims, and every lead links to a real page.
 It does not prove lead quality, that a run completes (`/api/run` is only checked to exist, never called), or that mail is delivered; the optional `--write-test` approves one pending draft (changes state, may spend one `outreach.sent` credit, never mails the lead) and is not part of the default run.
 
 Run: `.venv/bin/python scripts/smoke.py [BASE_URL]` (default `http://localhost:8765`). Exit code is non-zero on any FAIL; WARN (for example a GitHub rate limit) does not fail.

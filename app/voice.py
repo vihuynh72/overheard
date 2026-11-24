@@ -1,4 +1,4 @@
-"""Voice control: spoken words become one allowed action, and Earshot answers out loud."""
+"""Voice control: spoken words become one allowed action, and Overheard answers out loud."""
 import difflib
 import json
 import os
@@ -46,7 +46,7 @@ class Heard(BaseModel):
     level: str = ""
 
 
-SYSTEM = f"""You are the voice of Earshot, a line of agents that finds people describing a pain in public, drafts outreach, and sends it once trust gates are met. A founder spoke to you. Turn what they said into exactly one action and a short spoken reply.
+SYSTEM = f"""You are the voice of Overheard, a line of agents that finds people describing a pain in public, drafts outreach, and sends it once trust gates are met. A founder spoke to you. Turn what they said into exactly one action and a short spoken reply.
 
 Allowed actions and the fields each uses (leave other fields empty):
 - run: description (what they sell and who buys it), product_repo (owner/name, optional). Starts a search.

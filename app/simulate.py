@@ -1,4 +1,4 @@
-"""Run Earshot against many kinds of products and founders, measure it, and record what fails."""
+"""Run Overheard against many kinds of products and founders, measure it, and record what fails."""
 import argparse
 import collections
 import concurrent.futures
@@ -279,10 +279,10 @@ def _fit(row: dict) -> str:
     kind, n = row["kind"], row["cases"]
     stats = f"{row['works']} of {n} cases work, averaging {row['avg_leads']} leads and {row['relevant_pct']}% relevant"
     if row["works"] == n:
-        return f"Earshot fits {kind}: {stats}."
+        return f"Overheard fits {kind}: {stats}."
     if row["fails"] == n:
-        return f"Earshot does not fit {kind}: every case fails ({stats})."
-    return f"Earshot partly fits {kind}: {stats}."
+        return f"Overheard does not fit {kind}: every case fails ({stats})."
+    return f"Overheard partly fits {kind}: {stats}."
 
 
 def scorecard(results: list[dict]) -> dict:

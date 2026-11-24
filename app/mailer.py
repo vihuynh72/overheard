@@ -29,7 +29,7 @@ def send(lead: dict, subject: str, body: str, *, client: httpx.Client | None = N
         inbox = SINK  # the demo rule: never the lead
     try:
         r = (client or httpx).post(URL, timeout=15, headers={"Authorization": f"Bearer {key}"}, json={
-            "from": os.environ.get("MAIL_FROM") or "Earshot <onboarding@resend.dev>",
+            "from": os.environ.get("MAIL_FROM") or "Overheard <onboarding@resend.dev>",
             "to": [inbox],
             "subject": subject[:300],
             "text": f"{body}\n\n--\nDemo redirect: written for {meant_for}, delivered to the demo inbox only.",

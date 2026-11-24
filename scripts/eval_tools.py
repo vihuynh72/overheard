@@ -215,7 +215,7 @@ def _():
     lead = {"login": "evaltester", "name": "Sam Rivera", "email": "sam.rivera@example.com"}
     if mailer.gmail.status()["connected"]:
         return False, "Gmail is connected in this process; refusing to send so nothing reaches a real inbox", None
-    out = mailer.send(lead, "Earshot eval: redirect check", "Eval message. Written for a fake lead, sent to the Resend sink.")
+    out = mailer.send(lead, "Overheard eval: redirect check", "Eval message. Written for a fake lead, sent to the Resend sink.")
     ok = out["status"] == "sent" and out["to"] == mailer.SINK and out["to"] != lead["email"]
     return ok, f"app.mailer.send -> status {out['status']}, to {out.get('to')}, lead address {lead['email']} not used", None
 

@@ -9,7 +9,7 @@
 
   // --- the steps: every number is from today's run on flexprice.io ---
   const STEP = {
-    site: ["Start", "Your website", "You paste one link. That is all Earshot asks for.", "flexprice.io"],
+    site: ["Start", "Your website", "You paste one link. That is all Overheard asks for.", "flexprice.io"],
     planner: ["Step 1", "Planner", "Reads your site, names who buys and where they write.", "6 sites chosen to listen on"],
     trackers: ["Step 2", "Issue trackers", "Reads public issues on your repo and your open-source rivals.", "463 public posts read across 3 trackers plus forum posts"],
     forums: ["Step 2", "Forums and review sites", "Searches forums and review sites for the same complaints.", "Their posts are part of the 463 read"],

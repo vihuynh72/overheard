@@ -1,4 +1,4 @@
-// Earshot Ask: the one place the machine asks the founder something. Silent when nothing needs a person;
+// Overheard Ask: the one place the machine asks the founder something. Silent when nothing needs a person;
 // otherwise one question at a time, answerable in a word.
 // Every string from the server is untrusted: it reaches the page through textContent only.
 window.EarshotAsk = (() => {
@@ -36,7 +36,7 @@ window.EarshotAsk = (() => {
     follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume, whyMore, whyFull;
   function build() {
     root = el("section", "ask");
-    root.setAttribute("aria-label", "Earshot needs you");
+    root.setAttribute("aria-label", "Overheard needs you");
     card = el("div", "ask-card");
     card.tabIndex = -1;
     card.setAttribute("role", "dialog");

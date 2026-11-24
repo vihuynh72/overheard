@@ -76,7 +76,7 @@ Status is Built, Partly or Not built. "Board" and "Leads" are views on the `/app
 |---|---|---|---|
 | Planner, Builder, Reviewer, Security agents | Partly | `docs/band-run.md`, `scripts/band/` | Four real Band chats planned, wrote and reviewed one change. They ran read-only; an operator session relayed and applied the diff. |
 | @mention handoffs, HITL on dispatch | Partly | `docs/band-run.md` | One handoff hit a permission prompt; it was cancelled, not approved. |
-| Telemetry: streams, tokens, costs | Partly | `band chats watch` streams | Streams shown. No token or cost totals inside Earshot. |
+| Telemetry: streams, tokens, costs | Partly | `band chats watch` streams | Streams shown. No token or cost totals inside Overheard. |
 
 ## Bonus: Flexprice
 

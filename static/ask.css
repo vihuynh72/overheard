@@ -1,4 +1,4 @@
-/* Earshot Ask: a floating chip in the bottom-right corner that opens in place into the decision panel. Values from tokens.css. */
+/* Overheard Ask: a floating chip in the bottom-right corner that opens in place into the decision panel. Values from tokens.css. */
 :root { --ask-hit: 2.75rem; }
 .ask, .ask * { box-sizing: border-box; }
 .ask { position: fixed; right: var(--space-6); bottom: var(--space-6); z-index: 50; display: flex; flex-direction: column; align-items: flex-end; font: 400 var(--text-base)/1.5 var(--font-body); color: var(--color-ink); }

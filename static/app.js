@@ -2,7 +2,7 @@
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const safeUrl = u => /^https?:\/\//.test(u || "") ? esc(u) : "#";
 const $ = id => document.getElementById(id);
-const who = a => a === "rep" ? "you" : a === "agent" ? "Earshot" : a;
+const who = a => a === "rep" ? "you" : a === "agent" ? "Overheard" : a;
 const TIER = {A: "Strong", B: "Good", C: "Maybe"};
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // Home is the customer; the other two are pages of their own. Old section names land on the nearest page.
@@ -83,7 +83,7 @@ function buyer(role) {
 
 function homeStrip() {
   const {floor, billing} = ui.data, gates = floor.trust?.gates || [];
-  const level = floor.trust?.level === "autopilot" ? "Earshot sends on its own" : "You approve every message";
+  const level = floor.trust?.level === "autopilot" ? "Overheard sends on its own" : "You approve every message";
   return `<a href="#activity">${level}</a><span class="dot" aria-hidden="true">·</span>
     <a href="#trust">Trust checks <span class="num">${gates.filter(g => g.passed).length} of ${gates.length}</span> passed</a><span class="dot" aria-hidden="true">·</span>
     <a href="#credits"><span class="num">${Math.floor(billing.credits)}</span> credits left</a>`;
@@ -154,9 +154,10 @@ function homeCustomer(d, example) {
   const line = [kind && !/\sat\s/i.test(role || "") ? `At ${kind.replace(/\s+compan(y|ies)$/i, "")} companies` : "", trig ? lowerFirst(trig) : ""].filter(Boolean).join(", ");
   const banner = example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours.</span><button type="button" class="linkish" data-example-off>Use my website</button></p>` : "";
   const hero = `<header class="hero${enter(example ? "s-hero" : "h-hero")}"><div class="wrap">${banner}
-    <p class="label">${status.error ? "Last run stopped" : "Your customer"}</p>
-    <h1 class="display" id="home-line">${status.error ? "The last run <em>stopped</em>" : role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
-    ${status.error ? `<p class="hero-desc">${esc(String(status.error).replace(/^[A-Za-z]+Error:\s*/, ""))} These results are from the run before.</p>` : line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
+    ${status.error ? stoppedNote(status) : ""}
+    <p class="label">Your customer</p>
+    <h1 class="display" id="home-line">${role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
+    ${line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
     ${example || status.running ? "" : proofLine(d)}
     ${nextAction(d, example)}
     ${sites.length && n ? `<div class="logos"><p class="label bare">Heard from <span class="num">${n}</span> ${n === 1 ? "person" : "people"} on</p>
@@ -207,7 +208,7 @@ function fullProfile(i, said) {
 function intakeForm() {
   const back = ui.data.leads.length ? `<button type="button" class="linkish" data-restart-off>Back to your results</button>` : `<button type="button" class="linkish" data-example>See an example</button>`;
   return `<header class="hero"><div class="wrap">
-    <p class="label">Earshot</p>
+    <p class="label">Overheard</p>
     <h1 class="display">Who is your <em>customer</em>?</h1>
     <p class="hero-line">Paste your website. We find the people <em>already</em> describing your problem.</p>
     <form class="intake" id="intake" novalidate>
@@ -324,7 +325,7 @@ function runView() {
   const phrase = phraseOf(working(log)), fresh = ui.phrase !== undefined && phrase !== ui.phrase; ui.phrase = phrase;
   const last = tsOf(d, log.length - 1) || start, count = counter(d, cur), spent = spentSince(d, start);
   const meta = [`<span data-elapsed="${start}">${dur(Date.now() - start)}</span>`, `step ${step} of 5`, count, spent ? `${fmtCredits(spent)} used` : null].filter(Boolean).join(`<span class="dot" aria-hidden="true">·</span>`);
-  const html = `<header class="hero run-hero"><div class="wrap"><p class="label">Earshot${site ? ` · ${esc(site)}` : ""}</p>
+  const html = `<header class="hero run-hero"><div class="wrap"><p class="label">Overheard${site ? ` · ${esc(site)}` : ""}</p>
     <h1 class="display">Finding your <em>customers</em></h1>
     <p class="work" aria-live="polite">${GLYPH}<span class="work-verb${fresh ? " is-new" : ""}">${esc(phrase)}</span></p>
     <p class="work-meta num"><span class="work-still" data-still="${last}"${Date.now() - last > 20000 ? "" : " hidden"}>Still working<span class="dot" aria-hidden="true">·</span></span>${meta}</p></div></header>
@@ -379,12 +380,22 @@ function countUp() {
     if (p < 1) requestAnimationFrame(step); else els.forEach(el => el.removeAttribute("data-to")); };
   requestAnimationFrame(step);
 }
+// A run that stopped or was declined must not replace the answer the founder already has: say what happened,
+// in a block wide enough to read, and keep the earlier results underneath.
+function stoppedNote(status) {
+  const err = String(status.error || "").replace(/^[A-Za-z]+Error:\s*/, ""), decline = /not a fit/i.test(err);
+  const site = ((status.log || []).map(l => /reading\s+(\S+)/.exec(l)).find(Boolean) || [])[1] || "";
+  const host = site ? hostOf(/^https?:/.test(site) ? site : "https://" + site) || site : "";
+  return `<aside class="note" role="status"><p class="label bare">${decline ? "Not a fit" : "Last search stopped"}${host ? ` · ${esc(host)}` : ""}</p>
+    <p class="note-text">${esc(decline ? err.replace(/^Overheard is not a fit for this product:\s*/i, "") : err)}</p>
+    <p class="note-foot">Your earlier results are below. <button type="button" class="linkish" data-restart>Try another website</button></p></aside>`;
+}
 function failedView() {
   const err = String(ui.data.status.error || "").replace(/^[A-Za-z]+Error:\s*/, "");
   const decline = /not a fit/i.test(err);
   return `<header class="hero" role="alert"><div class="wrap"><p class="label">${decline ? "Not a fit" : "Stopped"}</p>
     <h1 class="display">${decline ? "Wrong tool for <em>this product</em>" : "The run <em>stopped</em>"}</h1>
-    <p class="hero-desc">${esc(decline ? err.replace(/^Earshot is not a fit for this product:\s*/i, "") : err)}</p>
+    <p class="hero-desc">${esc(decline ? err.replace(/^Overheard is not a fit for this product:\s*/i, "") : err)}</p>
     <div class="hero-act"><button type="button" class="btn" data-restart>${decline ? "Try another website" : "Try again"}</button></div></div></header>`;
 }
 
@@ -455,7 +466,7 @@ function board(shown, stages) {
   const card = l => { const open = ui.moving === l.login;
     return `<li class="bcard" draggable="true" data-drag="${esc(l.login)}"><button type="button" class="bc-open" data-open="${esc(l.login)}">${avatar(l)}
       <span class="bc-name">${esc(whoOf(l))}<small class="meta">${esc([l.company, `Score ${l.score}`].filter(Boolean).join(" · "))}</small></span></button>
-      <p class="bc-foot"><span>${flashFor(l.login) || `moved by ${esc(who(l.stage_actor) || "Earshot")}`}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
+      <p class="bc-foot"><span>${flashFor(l.login) || `moved by ${esc(who(l.stage_actor) || "Overheard")}`}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
       <div class="mv-menu" id="mv-${esc(l.login)}" role="group" aria-label="Move ${esc(whoOf(l))} to"${open ? "" : " hidden"}>${stages.map(s => `<button type="button" data-stage-to="${esc(s)}" data-login="${esc(l.login)}"${s === l.stage ? ` aria-current="true" disabled` : ""}>${esc(s)}</button>`).join("")}</div></li>`; };
   return `<div class="board${enter("board")}">${stages.map(s => { const ls = shown.filter(l => l.stage === s);
     return `<section class="col" data-drop="${esc(s)}" aria-label="${esc(s)}"><p class="label bare">${esc(s)} <span class="num">${ls.length}</span></p><ul class="col-list">${ls.map(card).join("")}</ul></section>`; }).join("")}</div>`;
@@ -553,7 +564,7 @@ function activityView() {
     (d.map ? block("graph", "The graph", "What the <em>map</em> shows", graphRows(d)) : "") +
     block("trust", "Trust", `${esc(LEVEL_SAYS[level] || cap(level))} · <em>${met} of ${gates.length}</em>`,
       `<ul class="rows">${gates.map(g => `<li><div class="r"><span class="r-k">${g.passed ? TICK : "–"}</span><span class="r-t">${esc(GATE_SAYS[g.key] || g.label)}<span class="visually-hidden">: ${g.passed ? "true" : "not yet"}</span></span><span class="r-n">${esc(gateVal(g))}</span></div></li>`).join("")}</ul>
-       <p class="sub">Earshot may send on its own only when all five of these are true.</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up === "autopilot" ? "Ask to send on its own" : up ? "Let it draft for you" : "Go back to approving each"}</button></div>` : ""}`) +
+       <p class="sub">Overheard may send on its own only when all five of these are true.</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up === "autopilot" ? "Ask to send on its own" : up ? "Let it draft for you" : "Go back to approving each"}</button></div>` : ""}`) +
     block("credits", "Credits", `<span class="credits-n num">${Math.floor(billing.credits)}</span> <em>left</em>`,
       `<p class="sub" style="margin:0 0 var(--space-6)">${billing.mode === "flexprice" ? "Metered by Flexprice." : "Local wallet."} Looking up a work email costs ${billing.costs["lead.enriched"]} · sending a message ${billing.costs["outreach.sent"]}.</p>
        ${rows.length ? `<ul class="rows">${shown.map(e => `<li><div class="r ledger"><span class="r-k">${esc(String(e.ts).slice(11, 19))}</span><span class="r-t">${esc(SPEND[e.event] || e.event)}${e.ok ? "" : " (not recorded)"}${e.lead ? ` <i>${esc(e.lead)}</i>` : ""}</span><span class="r-n">${Number(e.credits).toFixed(1)}</span></div></li>`).join("")}</ul>

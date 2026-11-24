@@ -1,4 +1,4 @@
-"""Intake: from a website address or a GitHub repository to the text Earshot reads to learn the product.
+"""Intake: from a website address or a GitHub repository to the text Overheard reads to learn the product.
 
 Plain functions with no imports from other app modules. Readers are injectable so tests never touch the network.
 Nothing here writes anything; it only reads public web pages and the public GitHub API.
@@ -149,7 +149,7 @@ def read_product(target: str, *, extract=None, fetch_repo=None) -> dict:
             name_hint = repo.split("/")[1]
         else:
             if extract is None:
-                return fail("no page reader is configured, so Earshot cannot read websites yet")
+                return fail("no page reader is configured, so Overheard cannot read websites yet")
             pages = _pages(extract, _site_urls(n["url"]))
             name_hint = (urlparse(n["url"]).hostname or "").removeprefix("www.").split(".")[0]
         if not pages:

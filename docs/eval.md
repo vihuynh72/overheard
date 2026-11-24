@@ -1,4 +1,4 @@
-# Eval: does Earshot use every sponsor tool, and use it well
+# Eval: does Overheard use every sponsor tool, and use it well
 
 ## How to re-run
 

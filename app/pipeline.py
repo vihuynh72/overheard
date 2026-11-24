@@ -267,7 +267,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
 
     if not icp.tracker_fit:
         # Lesson from the first simulation: stop before spending anything when the method cannot work.
-        raise RuntimeError(f"Earshot is not a fit for this product: {icp.tracker_fit_reason}")
+        raise RuntimeError(f"Overheard is not a fit for this product: {icp.tracker_fit_reason}")
 
     repos = {}
     if product_repo:

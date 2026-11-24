@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Earshot x Band: four role agents (Planner, Builder, Reviewer, Security) in one Band
+# Overheard x Band: four role agents (Planner, Builder, Reviewer, Security) in one Band
 # worktree. They hand work to each other by running `band chats send <chat id>` from their
 # shells, and Band's permission prompt makes the human approve each handoff before it runs.
 #
@@ -101,7 +101,7 @@ SEND="band chats send <CHAT> --worktree $WT --mode default --model $MODEL --mess
 # 5. Kickoff goes to the Planner only. Every later message is sent by an agent, not by this script.
 # read -d '' rather than $(cat <<EOF): macOS bash 3.2 misparses apostrophes in a heredoc inside $()
 IFS= read -r -d '' KICKOFF <<EOF || true
-You are the PLANNER in a four-agent team working in this Band worktree on Earshot (read CLAUDE.md).
+You are the PLANNER in a four-agent team working in this Band worktree on Overheard (read CLAUDE.md).
 Teammates are other Band chats. You reach one by running this shell command, nothing else:
   $SEND "<text>"
 Chat ids: Planner $P, Builder $B, Reviewer $R, Security $S.
@@ -109,7 +109,7 @@ Chat ids: Planner $P, Builder $B, Reviewer $R, Security $S.
 Task: web leads (signals with kind "web", from app/scout_web.py) that have no named author must never
 be released; app/policy.py decide() must hold them with a clear reason, plus a test in tests/.
 1. Read app/policy.py and app/scout_web.py. Write a plan of at most 8 lines: the exact rule, files, test.
-2. This changes what Earshot may send, so it needs the human. End your plan with the line
+2. This changes what Overheard may send, so it needs the human. End your plan with the line
    HUMAN DECISION: approve the handoff to Builder (Yes) or reject it (No).
 3. Then hand the plan to the Builder with the send command (chat $B). The human answers the
    permission prompt on that command; that prompt is the decision. If it is rejected, stop.

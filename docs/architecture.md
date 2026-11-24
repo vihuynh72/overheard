@@ -1,10 +1,10 @@
-# Earshot: system design and architecture
+# Overheard: system design and architecture
 
 This document describes what the code does today. Where something is partial, untested or missing, it says so, and the last section collects those points. Setup is in the [README](../README.md). The reasons behind each decision are in [log.md](log.md).
 
 ## 1. Overview
 
-Earshot takes a description of a product (typed, or read from a website or GitHub repository) and runs a line of seven agents: Planner, Scout, Qualifier, Enricher, Writer, Reviewer and Sender. The line ends in a drafted message with the person's own words as evidence. A human decides on each message, or, once five trust gates have been earned, the Sender releases messages that pass the sending policy. Messages are always redirected to the founder's own inbox or a demo inbox. No lead is ever emailed.
+Overheard takes a description of a product (typed, or read from a website or GitHub repository) and runs a line of seven agents: Planner, Scout, Qualifier, Enricher, Writer, Reviewer and Sender. The line ends in a drafted message with the person's own words as evidence. A human decides on each message, or, once five trust gates have been earned, the Sender releases messages that pass the sending policy. Messages are always redirected to the founder's own inbox or a demo inbox. No lead is ever emailed.
 
 Code layout, one file per concern:
 
@@ -250,7 +250,7 @@ Web leads get no contact lookup. The credit gate runs before each lookup, and a 
 
 Three events are metered: `lead.enriched` (2 credits), `outreach.sent` (1) and `graph.query` (0.1). The app records `lead.enriched` per enrichment, `outreach.sent` only when mail actually left, and `graph.query` once per lead.
 
-`scripts/flexprice_setup.py` creates these Flexprice objects, and is safe to repeat: a plan `earshot-credits` ("Earshot Credits"); one metered feature per event, each with a COUNT meter that resets per billing period; one usage price per meter on the plan (2, 1 and 0.1 USD, flat fee, monthly, arrears); and a subscription of the customer to the plan. The customer and the prepaid wallet are made in the dashboard first. The log records why the subscription matters: the wallet balance did not move until usage was priced on a subscribed plan.
+`scripts/flexprice_setup.py` creates these Flexprice objects, and is safe to repeat: a plan `earshot-credits` ("Overheard Credits"); one metered feature per event, each with a COUNT meter that resets per billing period; one usage price per meter on the plan (2, 1 and 0.1 USD, flat fee, monthly, arrears); and a subscription of the customer to the plan. The customer and the prepaid wallet are made in the dashboard first. The log records why the subscription matters: the wallet balance did not move until usage was priced on a subscribed plan.
 
 The gate (`billing.gate`) is where execution stops. Flexprice only records and prices. The gate refuses when the balance is below the event's cost ("Out of credits"), and refuses a tier C lead when the balance is under 15 credits. It runs:
 
@@ -310,7 +310,7 @@ Limits:
 - Railway storage is ephemeral: a redeploy clears the graph, the autopilot state, the lessons and the profile unless a volume is mounted.
 - Forum authors usually cannot be identified (only Reddit and X yield a handle), so those leads are evidence only and are always held. Web leads have no contact lookup.
 - The method declines products whose buyers do not write in public; four of ten simulated products are refused for that reason. Feature-flag and logging products returned nothing after the stricter filter, and the cause was not investigated.
-- Band: [band-run.md](band-run.md) records four Band-hosted agents that planned, built and reviewed one change in read-only plan mode, relayed by an operator session through the Band CLI. The operator applied the diff, and no permission prompt was approved by automation. The seven agents inside Earshot are functions in one process, not Band agents. `scripts/band/demo.sh` was smoke-tested but a full handoff through it was not observed ([band.md](band.md)).
+- Band: [band-run.md](band-run.md) records four Band-hosted agents that planned, built and reviewed one change in read-only plan mode, relayed by an operator session through the Band CLI. The operator applied the diff, and no permission prompt was approved by automation. The seven agents inside Overheard are functions in one process, not Band agents. `scripts/band/demo.sh` was smoke-tested but a full handoff through it was not observed ([band.md](band.md)).
 - Gmail sending is coded and tested against faked HTTP, but the Google console setup was not finished, so Resend to a test inbox is what runs. Tokens are in memory.
 - State is in one process: run log, credit ledger, Gmail tokens, run budget. Files in `data/` hold the graph, the policy and decisions, and the lessons. Run one instance.
 - Accepted expansion segments are saved but do not change discovery, and the interface no longer offers them. The stage route, `/api/policy`, `/api/voice` and `/api/speak` have no screen.

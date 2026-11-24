@@ -21,7 +21,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 from app import autopilot, billing, gmail, graphq, intake, mailer, mcp_server, pipeline, policy, store, voice  # noqa: E402
 
-app = FastAPI(title="Earshot", lifespan=mcp_server.lifespan)
+app = FastAPI(title="Overheard", lifespan=mcp_server.lifespan)
 mcp_server.mount(app)  # /mcp: the same app for agents
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -38,7 +38,7 @@ async def fresh_static(request, call_next):
 class RunIn(BaseModel):
     description: str = Field(default="", max_length=20000)
     product_repo: str = Field(default="", max_length=100, pattern=r"^$|^[\w.-]+/[\w.-]+$")
-    target: str = Field(default="", max_length=200)  # a website or GitHub repository: Earshot reads the description itself
+    target: str = Field(default="", max_length=200)  # a website or GitHub repository: Overheard reads the description itself
 
     @model_validator(mode="after")
     def _needs_one(self):

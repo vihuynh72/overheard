@@ -1,4 +1,4 @@
-"""End-to-end smoke test for any Earshot deployment.
+"""End-to-end smoke test for any Overheard deployment.
 
     .venv/bin/python scripts/smoke.py [BASE_URL]              read-only (default http://localhost:8765)
     .venv/bin/python scripts/smoke.py [BASE_URL] --write-test  ALSO approves one pending draft

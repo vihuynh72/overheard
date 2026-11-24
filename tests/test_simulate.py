@@ -177,9 +177,9 @@ def test_fit_sentences_follow_the_numbers():
     rs = [result(kind="good"), result(kind="bad", verdict="fails", leads=0, judged=0, relevant=0),
           result(kind="mixed"), result(kind="mixed", verdict="fails")]
     fit = {k: next(s for s in simulate.scorecard(rs)["fit"] if f" {k}" in s) for k in ("good", "bad", "mixed")}
-    assert fit["good"].startswith("Earshot fits")
-    assert fit["bad"].startswith("Earshot does not fit")
-    assert fit["mixed"].startswith("Earshot partly fits")
+    assert fit["good"].startswith("Overheard fits")
+    assert fit["bad"].startswith("Overheard does not fit")
+    assert fit["mixed"].startswith("Overheard partly fits")
 
 
 # derive_lessons
