@@ -1,0 +1,105 @@
+/* Voice control. Values not in tokens.css are named here. */
+.voice {
+  --voice-bar-w: 3px;
+  --voice-meter-h: 1.5rem;
+  --voice-meter-w: 4.5rem;
+  --voice-press: 0.98;
+  --voice-state: var(--color-control);
+  display: grid;
+  gap: var(--space-3);
+  max-width: 100%;
+  min-width: 0;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+.voice[data-state="listening"] { --voice-state: var(--color-accent); }
+.voice[data-state="thinking"] { --voice-state: var(--color-muted); }
+.voice[data-state="speaking"] { --voice-state: var(--color-good); }
+.voice[data-state="error"] { --voice-state: var(--color-danger); }
+
+.voice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-self: start;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--color-ink);
+  background: var(--color-paper-2);
+  border: 1px solid var(--voice-state);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out), transform var(--dur-short) var(--ease-out);
+}
+.voice-btn:hover { background: var(--color-paper-3); }
+.voice-btn:active { transform: scale(var(--voice-press)); }
+.voice-btn[aria-pressed="true"] { background: var(--color-paper-3); }
+.voice-btn[aria-disabled="true"] { cursor: progress; }
+.voice-btn:focus-visible, .voice-retry:focus-visible, .voice-input:focus-visible, .voice-send:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.voice-meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  width: var(--voice-meter-w);
+  height: var(--voice-meter-h);
+}
+.voice-bar {
+  flex: 1;
+  max-width: var(--voice-bar-w);
+  height: 100%;
+  background: var(--voice-state);
+  border-radius: var(--radius-pill);
+  transform: scaleY(0.12);
+  will-change: transform;
+}
+.voice-label { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+
+.voice-line { margin: 0; min-height: 1.5em; font-size: var(--text-base); line-height: 1.5; overflow-wrap: anywhere; }
+.voice-heard { display: block; color: var(--color-muted); font-style: italic; }
+.voice-heard:not(:empty)::before { content: "\201C"; }
+.voice-heard:not(:empty)::after { content: "\201D"; }
+.voice-reply { display: block; font-family: var(--font-display); font-size: var(--text-lg); color: var(--color-ink); }
+.voice[data-state="error"] .voice-reply { color: var(--color-danger); font-family: var(--font-body); font-size: var(--text-base); }
+
+.voice-retry, .voice-send {
+  justify-self: start;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+}
+.voice-retry { color: var(--color-ink); background: none; border: 1px solid var(--color-danger); }
+.voice-retry:hover { background: var(--color-paper-2); }
+.voice-send { color: var(--color-on-accent); background: var(--color-accent); border: 1px solid var(--color-accent); font-weight: 500; }
+.voice-send:hover { background: var(--color-accent-strong); }
+
+.voice-type { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: end; }
+.voice-type[hidden], .voice-retry[hidden] { display: none; }
+.voice-type-label { grid-column: 1 / -1; font-size: var(--text-sm); color: var(--color-muted); }
+.voice-input {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--color-ink);
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-control);
+  border-radius: var(--radius-sm);
+}
+.voice-input::placeholder { color: var(--color-control); }
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-btn:active { transform: none; }
+  .voice-btn, .voice-retry, .voice-send { transition: none; }
+  .voice-bar { will-change: auto; }
+}

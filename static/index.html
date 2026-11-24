@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earshot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/factory.css">
+<link rel="stylesheet" href="/static/map.css">
+<link rel="stylesheet" href="/static/habitat.css">
+<link rel="stylesheet" href="/static/profile.css">
+<link rel="stylesheet" href="/static/voice.css">
+<link rel="stylesheet" href="/static/pilot.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Earshot</a>
+  <nav class="tabs" aria-label="Views">
+    <a href="#floor" data-view="floor">Floor</a>
+    <a href="#leads" data-view="leads">Leads</a>
+    <a href="#map" data-view="map">Map</a>
+    <a href="#pipeline" data-view="pipeline">Pipeline</a>
+    <a href="#profile" data-view="profile">Profile</a>
+    <a href="#activity" data-view="activity">Activity</a>
+  </nav>
+  <div class="top-end"><div id="voice"></div><p class="status" id="status" aria-live="polite"></p></div>
+</header>
+<main id="view"></main>
+<script src="/static/factory.js"></script>
+<script src="/static/map.js"></script>
+<script src="/static/habitat.js"></script>
+<script src="/static/profile.js"></script>
+<script src="/static/voice.js"></script>
+<script src="/static/pilot.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

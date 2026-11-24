@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earshot pilot demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="pilot.css">
+<style>
+  .demo-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-rule); background: var(--color-paper-2); font-size: var(--text-sm); }
+  .demo-bar p { color: var(--color-muted); max-width: 40rem; }
+  .demo-bar .feed { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .demo-bar button { padding: var(--space-1) var(--space-3); border: 1px solid var(--color-rule); border-radius: var(--radius-pill); background: var(--color-paper); cursor: pointer; transition: border-color var(--dur-short) var(--ease-out); }
+  .demo-bar button:hover { border-color: var(--color-control); }
+  .demo-bar .tally { margin-left: auto; display: flex; gap: var(--space-4); }
+  .demo-bar .tally output { font-family: var(--font-mono); color: var(--color-ink); }
+  .tally .bad output { color: var(--color-danger); }
+  main { max-width: 80rem; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-12); }
+  .view-head { margin-bottom: var(--space-6); }
+  .view-head h1 { font: 500 var(--text-2xl)/1.15 var(--font-display); letter-spacing: -0.015em; }
+  .view-head p { margin-top: var(--space-2); color: var(--color-muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-6); }
+  .card { padding: var(--space-4); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
+  .card h2 { font: 500 var(--text-lg)/1.2 var(--font-display); margin-bottom: var(--space-3); }
+  .floor-headline { font: 500 var(--text-xl)/1.2 var(--font-display); margin-bottom: var(--space-4); }
+  .floor-log li { display: flex; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-rule); font-size: var(--text-sm); }
+  .floor-level { font: 500 var(--text-xl)/1.2 var(--font-mono); margin-bottom: var(--space-3); }
+  .floor-inbox li { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); }
+  .floor-reasons { font-size: var(--text-sm); color: var(--color-muted); }
+  .chip-btn { justify-self: start; padding: var(--space-1) var(--space-3); border: 1px solid var(--color-rule); border-radius: var(--radius-pill); background: transparent; cursor: pointer; }
+  .gold { border: 0; background: var(--color-accent); color: var(--color-on-accent); font-weight: 500; }
+  .detail { padding: var(--space-4); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
+  .detail h2 { font: 500 var(--text-xl)/1.2 var(--font-display); margin-bottom: var(--space-3); }
+  .signal blockquote { margin: var(--space-3) 0; padding-left: var(--space-3); border-left: 2px solid var(--color-accent); color: var(--color-ink); }
+  .meta { font-size: var(--text-xs); color: var(--color-muted); }
+  .map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-4); }
+  .map-grid li { padding: var(--space-3); border: 1px solid var(--color-rule); border-radius: var(--radius-md); font-size: var(--text-sm); }
+  .map-grid strong { display: block; font-weight: 500; margin-bottom: var(--space-1); }
+  .empty { color: var(--color-muted); }
+  @media (max-width: 60rem) {
+    .split { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+    main, .demo-bar { padding-left: var(--space-4); padding-right: var(--space-4); }
+    .demo-bar .tally { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#leads">Earshot</a>
+  <nav class="tabs" aria-label="Views">
+    <a href="#floor" data-view="floor">Floor</a>
+    <a href="#leads" data-view="leads">Leads</a>
+    <a href="#map" data-view="map">Map</a>
+  </nav>
+  <span></span>
+</header>
+<section class="demo-bar" aria-label="Demo controls">
+  <p>Sample data, every name invented. Feed states to the pilot and watch it work. Moving your mouse hands you the controls; it takes back over after 8 seconds of stillness.</p>
+  <div class="feed">
+    <button type="button" data-feed="0">Idle</button>
+    <button type="button" data-feed="1">Run starts</button>
+    <button type="button" data-feed="2">Handoffs</button>
+    <button type="button" data-feed="3">Leads arrive</button>
+    <button type="button" data-feed="4">Needs you</button>
+    <button type="button" data-feed="5">Trust changes</button>
+    <button type="button" id="play">Play the whole story</button>
+  </div>
+  <div class="tally">
+    <span>Pilot clicks <output id="clicks">0</output></span>
+    <span class="bad">Denied controls the pilot pressed <output id="denied">0</output></span>
+  </div>
+</section>
+<main id="view"></main>
+<script src="pilot.js"></script>
+<script>
+(function () {
+  "use strict";
+  var L = [
+    { login: "mtorvik", name: "Maren Torvik", score: 88, tier: "A", draft_status: "pending", stage: "Drafted", quote: "We built our own usage metering on top of Postgres and it falls over every time a customer sends a burst of events. Month-end invoices are wrong and finance finds out before we do.", pain: "Usage metering breaks under bursts" },
+    { login: "dvolkov", name: "Dara Volkov", score: 84, tier: "A", draft_status: "pending", stage: "Drafted", quote: "Credits and prepaid wallets are impossible to model. We hack it with negative line items and pray.", pain: "Prepaid credits cannot be modelled" },
+    { login: "sfairweather", name: "Sam Fairweather", score: 77, tier: "A", draft_status: "pending", stage: "Matched", quote: "Changing a plan mid-cycle means a spreadsheet, a manual proration and an apology email.", pain: "Mid-cycle plan changes are manual" },
+    { login: "hwexler", name: "Hanna Wexler", score: 71, tier: "B", draft_status: "pending", stage: "Matched", quote: "No way to show customers live usage against their limit, so they get surprised by the bill and churn.", pain: "Customers cannot see live usage" },
+    { login: "gferro", name: "Giulia Ferro", score: 63, tier: "B", draft_status: "pending", stage: "Matched", quote: "Pricing experiments take a sprint each because prices are hardcoded in three services.", pain: "Prices are hardcoded" }
+  ];
+  var H = [
+    { from: "planner", to: "scout", text: "Planner sent five pains to Scout" },
+    { from: "scout", to: "qualifier", text: "Scout found 41 people describing them" },
+    { from: "qualifier", to: "enricher", text: "Qualifier kept 18 with a company and recent evidence" },
+    { from: "enricher", to: "writer", text: "Enricher verified 11 contacts" },
+    { from: "writer", to: "reviewer", text: "Writer drafted 11 messages" }
+  ];
+  function S(o) {
+    return { status: { running: !!o.running, error: null, log: (o.h || []).map(function (x) { return x.text; }) }, leads: o.leads || [],
+      floor: { trust: { level: o.level || "supervised" }, inbox: o.inbox || [], handoffs: o.h || [] }, icp: o.leads ? {} : null };
+  }
+  var states = [
+    S({}),
+    S({ running: true, h: H.slice(0, 1) }),
+    S({ running: true, h: H.slice(0, 3) }),
+    S({ h: H, leads: L }),
+    S({ h: H, leads: L, inbox: [{ login: "hwexler", name: "Hanna Wexler", reasons: ["Contact is a personal webmail address", "Draft makes a claim the reviewer could not check"] }] }),
+    S({ h: H, leads: L, level: "assisted", inbox: [{ login: "hwexler", name: "Hanna Wexler", reasons: ["Contact is a personal webmail address"] }] })
+  ];
+  var data = states[0], selected = null;
+  var view = function () { var v = location.hash.slice(1); return ["floor", "leads", "map"].indexOf(v) >= 0 ? v : "leads"; };
+
+  function h(tag, cls, text, attrs) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    for (var k in attrs || {}) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  function head(t, s) { var x = h("header", "view-head"); x.append(h("h1", null, t), h("p", null, s)); return x; }
+
+  function floorView() {
+    var f = h("div"), hs = data.floor.handoffs, last = hs[hs.length - 1];
+    f.append(head("Floor", "The line of agents, why it can be trusted, and what needs you."));
+    var cards = h("div", "cards");
+    var line = h("section", "card"); line.append(h("h2", null, "The line"), h("p", "floor-headline", last ? last.text : "The line is waiting for its first run."));
+    var log = h("ol", "floor-log");
+    hs.slice().reverse().forEach(function (x) { var li = h("li"); li.append(h("span", "num muted", x.from + " to " + x.to), h("span", null, x.text)); log.append(li); });
+    line.append(log);
+    var trust = h("section", "card floor-trust"); trust.append(h("h2", null, "Why you can trust it"), h("p", "floor-level", data.floor.trust.level));
+    var ctl = h("div", "floor-control"); ctl.append(h("button", "chip-btn gold", "Request autopilot", { type: "button" })); trust.append(ctl);
+    var inbox = h("section", "card floor-inbox"); inbox.append(h("h2", null, "Needs you"));
+    if (!data.floor.inbox.length) inbox.append(h("p", "empty", "Nothing needs you. The line is running."));
+    var ul = h("ul");
+    data.floor.inbox.forEach(function (it) {
+      var li = h("li"), b = h("button", "chip-btn floor-inbox-btn", it.name, { type: "button", "data-inbox": it.login });
+      var r = h("ul", "floor-reasons"); it.reasons.forEach(function (x) { r.append(h("li", null, x)); });
+      li.append(b, r); ul.append(li);
+    });
+    inbox.append(ul);
+    // No data-act here on purpose: the pilot must refuse it by its text alone.
+    if (data.floor.inbox.length) inbox.append(h("button", "chip-btn gold", "Approve all held drafts", { type: "button" }));
+    cards.append(line, trust, inbox);
+    f.append(cards);
+    return f;
+  }
+
+  function leadsView() {
+    var f = h("div");
+    if (!data.leads.length) {
+      f.append(head("Find people already describing the problem you solve", "Describe the product and Earshot reads public issue trackers for people with the pain."));
+      var form = h("form", null, null, { id: "intake" }); form.append(h("button", "chip-btn gold", "Find leads", { type: "button" }));
+      f.append(form);
+      return f;
+    }
+    f.append(head(data.leads.length + " people described a pain you solve", "Ranked by fit and by how closely their own words match."));
+    var split = h("div", "split"), list = h("ul");
+    data.leads.forEach(function (l) {
+      var li = h("li"), b = h("button", "row", null, { type: "button", "data-open": l.login, "aria-pressed": String(l.login === selected) });
+      var who = h("span", "who", l.name); who.append(h("small", null, "@" + l.login));
+      b.append(h("span", "score num", String(l.score)), who, h("span", "why", l.pain), h("span", "stage", l.stage));
+      li.append(b); list.append(li);
+    });
+    var d = h("aside", "detail", null, { id: "detail" }), l = data.leads.filter(function (x) { return x.login === selected; })[0];
+    if (!l) d.append(h("p", "empty", "Choose a person on the left."));
+    else {
+      var sig = h("article", "signal"); sig.append(h("p", "meta num", "getlago/lago · 2026-10-02 · match 0.81"), h("blockquote", null, l.quote));
+      var act = h("div", "actions"); act.append(h("button", "chip-btn gold", "Approve message", { type: "button", "data-act": "approve" }), h("button", "chip-btn", "Reject", { type: "button", "data-act": "start-reject" }));
+      d.append(h("h2", null, l.name), sig, act);
+    }
+    split.append(list, d);
+    f.append(split);
+    return f;
+  }
+
+  function mapView() {
+    var f = h("div"), m = h("ul", "map-grid", null, { id: "mount-map" });
+    f.append(head("Who said what", "Each pain, the people who voiced it, and where they wrote."));
+    data.leads.forEach(function (l) { var li = h("li"); li.append(h("strong", null, l.pain), h("span", "muted", l.name)); m.append(li); });
+    if (!data.leads.length) m.append(h("li", "empty", "No pains mapped yet."));
+    f.append(m);
+    return f;
+  }
+
+  function render() {
+    var v = view();
+    document.querySelectorAll(".tabs a").forEach(function (a) { a.dataset.view === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
+    var main = document.getElementById("view");
+    main.replaceChildren({ floor: floorView, leads: leadsView, map: mapView }[v]());
+  }
+
+  function feed(i) { data = states[i]; render(); window.EarshotPilot.update(data); }
+
+  var clicks = 0, denied = 0;
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("button, a");
+    if (!t) return;
+    if (!e.isTrusted) document.getElementById("clicks").textContent = String(++clicks);
+    if (!e.isTrusted && window.EarshotPilot.isDenied(t)) document.getElementById("denied").textContent = String(++denied);
+    var feedBtn = t.getAttribute("data-feed");
+    if (feedBtn != null) { feed(Number(feedBtn)); return; }
+    if (t.id === "play") { play(); return; }
+    var open = t.getAttribute("data-open"), ib = t.getAttribute("data-inbox");
+    if (open) { selected = open; render(); }
+    if (ib) { selected = ib; location.hash = "leads"; render(); }
+  });
+  addEventListener("hashchange", render);
+
+  var timer = 0;
+  function play() {
+    clearTimeout(timer);
+    var at = [1, 2, 3, 4, 5], wait = [0, 5000, 7000, 24000, 16000];
+    (function step(k) { if (k >= at.length) return; timer = setTimeout(function () { feed(at[k]); step(k + 1); }, wait[k]); })(0);
+  }
+
+  render();
+  window.EarshotPilot.update(data);
+  if (/[?&]auto\b/.test(location.search)) play();
+})();
+</script>
+</body>
+</html>

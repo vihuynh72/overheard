@@ -1,0 +1,51 @@
+/* Hallmark · macrostructure: Workbench · tone: editorial-utilitarian · anchor hue: 265 (deep navy ground, paper-coloured type)
+ * theme: custom (vibe: "night navy ground, paper type, gold for action, evidence first")
+ * ground oklch(21% 0.035 265) · accent oklch(80% 0.1 82) gold · Newsreader + Geist + Geist Mono
+ * axes: dark / classical-serif / warm
+ * pre-emit critique: P4 H4 E4 S5 R5 V4
+ */
+:root {
+  color-scheme: dark;
+  --color-paper: oklch(21% 0.035 265);
+  --color-paper-2: oklch(25% 0.038 265);
+  --color-paper-3: oklch(30% 0.042 265);
+  --color-rule: oklch(37% 0.035 265);
+  --color-control: oklch(60% 0.03 265);
+  --color-muted: oklch(77% 0.02 85);
+  --color-ink: oklch(94% 0.012 85);
+  --color-accent: oklch(80% 0.1 82);
+  --color-accent-strong: oklch(87% 0.09 82);
+  --color-on-accent: oklch(21% 0.035 265);
+  --color-gold: oklch(80% 0.1 82);
+  --color-good: oklch(80% 0.09 175);
+  --color-danger: oklch(76% 0.13 28);
+  --color-focus: oklch(80% 0.1 82);
+  --color-shadow: oklch(10% 0.03 265 / 0.5);
+
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-short: 150ms;
+  --dur: 220ms;
+}
