@@ -187,3 +187,11 @@ def test_build_leads_without_channels_falls_back_and_learns_nothing_when_refine_
     icp, leads = pipeline.build_leads("a product description long enough", "o/r", say=said.append)
     assert icp["learned_pains"] == [] and got == {"a": scout_web.PROCESS_AREAS, "d": []} and leads
     assert not any("listening on" in s or "learned how" in s for s in said)
+
+
+def test_no_gh_cli_and_no_token_reads_unauthenticated(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(pipeline.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("gh")))
+    seen = {}
+    monkeypatch.setattr(pipeline.httpx, "get", lambda url, **k: seen.update(k["headers"]) or type("R", (), {"status_code": 404})())
+    assert pipeline.gh("/x") is None and "Authorization" not in seen

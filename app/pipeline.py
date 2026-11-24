@@ -146,13 +146,17 @@ End after the ask: no sign-off, no signature, and no bracketed placeholders such
 # --- GitHub ----------------------------------------------------------------
 
 def _token() -> str:
-    return os.getenv("GITHUB_TOKEN") or subprocess.run(
-        ["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
+    if os.getenv("GITHUB_TOKEN"):
+        return os.environ["GITHUB_TOKEN"]
+    try:
+        return subprocess.run(["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
+    except FileNotFoundError:  # a server without the gh CLI reads public issues unauthenticated (60 requests an hour)
+        return ""
 
 
 def gh(path: str, **params):
     r = httpx.get("https://api.github.com" + path, params=params, timeout=30,
-                  headers={"Authorization": f"Bearer {_token()}", "Accept": "application/vnd.github+json"})
+                  headers={"Accept": "application/vnd.github+json", **({"Authorization": f"Bearer {t}"} if (t := _token()) else {})})
     return r.json() if r.status_code == 200 else None
 
 
