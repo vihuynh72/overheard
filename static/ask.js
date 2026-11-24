@@ -349,6 +349,7 @@ window.EarshotAsk = (() => {
 
   function onKey(e) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !current) return;
+    if (!root || root.offsetParent === null) return;  // a key must never answer a question the founder cannot see
     const t = e.target;
     if (step === "why" && e.key === "Escape" && !busy) { e.preventDefault(); setStep("ask"); noB.focus({preventScroll: true}); return; }
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;

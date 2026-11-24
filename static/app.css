@@ -227,3 +227,6 @@ button.said-row:hover .said-who { text-decoration: underline; text-underline-off
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* The question belongs to a result: never beside the arrival, progress, example or failure screens. */
+body.is-fresh .ask-slot { display: none; }
