@@ -254,3 +254,6 @@ a.r:hover, button.r:hover { background: rgba(255, 255, 255, 0.55); }
 .live .st-lines { margin-top: var(--space-3); max-height: 20rem; overflow-y: auto; }
 .conv { max-width: 28rem; }
 .conv-row .bar { width: 100%; }
+
+/* The label is one phrase: the pill gap must not add a second space before its hidden-on-narrow half. */
+.nav .nav-cta { gap: 0; }

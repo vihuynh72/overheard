@@ -11,6 +11,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/landing.css">
+<script>document.documentElement.classList.add("js");</script>
+<!-- Optional: without these the page is complete, only the scripted motion is skipped. -->
+<script src="/static/vendor/gsap.min.js" defer></script>
+<script src="/static/vendor/ScrollTrigger.min.js" defer></script>
 <script src="/static/landing.js" defer></script>
 </head>
 <body>
@@ -18,48 +22,89 @@
 <header class="nav-wrap">
   <nav class="nav" aria-label="Primary">
     <a class="mark" href="#top" aria-label="Earshot"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="10" r="1.75" fill="currentColor" stroke="none"/><path d="M9 6.5a5 5 0 0 1 0 7"/><path d="M12 3.6a9 9 0 0 1 0 12.8"/></svg></a>
-    <a href="#answer">Answer</a>
     <a href="#how">How</a>
+    <a href="#answer">Answer</a>
     <a href="#limits">Limits</a>
     <a class="nav-cta" href="/app">Find my<span class="long">&nbsp;customers</span></a>
+    <span class="nav-progress" aria-hidden="true"><i></i></span>
   </nav>
 </header>
 
 <main id="main">
-  <header class="hero" id="top"><div class="wrap">
+  <header class="hero" id="top"><div class="hero-wash" aria-hidden="true"><i></i><i></i><i></i></div><div class="wrap">
     <p class="label">Earshot</p>
-    <h1 class="display">Find the people already <em>naming your problem</em></h1>
+    <h1 class="display hero-title"><span class="ln"><span>Find the people already</span></span> <span class="ln"><span><em>naming your problem</em></span></span></h1>
     <p class="hero-line">Outbound that starts from what people <em>wrote</em>.</p>
-    <p class="hero-desc">Paste your website. See who described your problem, in their words, with a link.</p>
-    <div class="hero-act"><a class="btn" href="/app">Find my customers</a><p class="hint">About two minutes</p></div>
-    <div class="logos"><p class="label bare">Heard on flexprice.io today</p>
-      <ul class="logo-row"><li>&ldquo;no invoice when the charge is $0&rdquo;</li><li>&ldquo;coupons don&rsquo;t reach Stripe&rdquo;</li><li>&ldquo;a webhook at quota&rdquo;</li></ul></div>
+    <div class="hero-act"><a class="btn" href="/app">Find my customers</a><p class="hint">Paste your website. About two minutes.</p></div>
   </div></header>
 
-  <section class="sec reveal" id="answer"><div class="wrap">
-    <div class="sec-head"><p class="label">The answer</p><h2 class="title">One run, <em>one screen</em></h2><p class="sub">flexprice.io, usage billing. That run&rsquo;s numbers, not a promise.</p></div>
-    <ul class="cards">
-      <li class="card"><div class="card-media"><p class="card-big num">463<small>issues read</small></p></div><div class="card-body"><p class="card-title">Where they write</p><p class="card-line">Public trackers of Flexprice and two open-source rivals.</p><p class="meta">GitHub · forums</p></div></li>
-      <li class="card"><div class="card-media"><p class="card-big num">39<small>people</small></p></div><div class="card-body"><p class="card-title">What hurts</p><p class="card-line">People describing a billing pain the product solves.</p><p class="meta">Matched by meaning</p></div></li>
-      <li class="card"><div class="card-media"><p class="card-big num">6<small>kept</small></p></div><div class="card-body"><p class="card-title">Who to write to</p><p class="card-line">Backend engineers building billing, each with a draft.</p><p class="meta">You approve each</p></div></li>
-    </ul>
+  <section class="sec" id="how" aria-labelledby="how-h"><div class="wrap wide">
+    <div class="sec-head"><p class="label">How it works</p><h2 class="title" id="how-h">One run, <em>end to end</em></h2>
+      <p class="sub">Pick any step, or play today&rsquo;s run on flexprice.io.</p></div>
+    <div class="play-bar">
+      <button type="button" class="pill play" id="play" aria-pressed="false"><span class="play-ic" aria-hidden="true"></span><span class="play-t">Play the run</span></button>
+      <p class="funnel" aria-live="polite"><span class="num" id="funnel-n">463</span> <span id="funnel-t">posts read</span></p>
+    </div>
+
+    <div class="map" id="map">
+      <svg class="map-lines" id="map-lines" aria-hidden="true"></svg>
+      <ol class="flow" id="flow" aria-label="The steps of one run">
+        <li class="nd" data-c="1"><button type="button" class="node" data-id="site"><span class="nd-t">Your website</span><span class="nd-s">flexprice.io</span></button></li>
+        <li class="nd" data-c="2"><button type="button" class="node" data-id="planner" data-meter data-graph><span class="nd-t">Planner</span></button><span class="chips"><button type="button" class="chip" data-tool="claude" data-m="C" aria-pressed="false">Claude</button><button type="button" class="chip" data-tool="tavily" data-m="T" aria-pressed="false">Tavily</button></span></li>
+        <li class="nd" data-c="3" data-r="1"><button type="button" class="node" data-id="trackers" data-meter data-graph><span class="nd-t">Issue trackers</span></button><span class="chips"><button type="button" class="chip" data-tool="github" data-m="GH" aria-pressed="false">GitHub</button></span></li>
+        <li class="nd" data-c="3" data-r="2"><button type="button" class="node" data-id="forums" data-meter data-graph><span class="nd-t">Forums and review sites</span></button><span class="chips"><button type="button" class="chip" data-tool="tavily" data-m="T" aria-pressed="false">Tavily</button></span></li>
+        <li class="nd" data-c="4"><button type="button" class="node" data-id="match" data-meter data-graph><span class="nd-t">Match by meaning</span></button><span class="chips"><button type="button" class="chip" data-tool="moss" data-m="M" aria-pressed="false">Moss</button></span></li>
+        <li class="nd" data-c="5"><button type="button" class="node" data-id="qualifier" data-meter data-graph><span class="nd-t">Qualifier</span></button><span class="chips"><button type="button" class="chip" data-tool="claude" data-m="C" aria-pressed="false">Claude</button></span></li>
+        <li class="nd" data-c="6"><button type="button" class="node" data-id="enricher" data-meter data-graph><span class="nd-t">Enricher</span></button><span class="chips"><button type="button" class="chip" data-tool="hunter" data-m="H" aria-pressed="false">Hunter</button></span></li>
+        <li class="nd" data-c="7"><button type="button" class="node" data-id="writer" data-meter data-graph><span class="nd-t">Writer</span></button><span class="chips"><button type="button" class="chip" data-tool="claude" data-m="C" aria-pressed="false">Claude</button></span></li>
+        <li class="nd" data-c="8"><button type="button" class="node" data-id="reviewer" data-meter data-graph><span class="nd-t">Reviewer</span></button><span class="chips"><button type="button" class="chip" data-tool="subq" data-m="SQ" aria-pressed="false">SubQ</button></span></li>
+        <li class="nd" data-c="9"><button type="button" class="node" data-id="you" data-graph><span class="nd-t">You: yes or no</span><span class="nd-s">Nothing goes alone</span></button></li>
+        <li class="nd" data-c="10"><button type="button" class="node" data-id="inbox"><span class="nd-t">Test inbox</span></button><span class="chips"><button type="button" class="chip" data-tool="resend" data-m="R" aria-pressed="false">Resend</button></span></li>
+        <li class="rail" data-rail="meter"><button type="button" class="node rail-b" data-id="meter"><span class="nd-t">Every step is metered</span></button><span class="chips"><button type="button" class="chip" data-tool="flexprice" data-m="F" aria-pressed="false">Flexprice</button></span></li>
+        <li class="rail" data-rail="graph"><button type="button" class="node rail-b" data-id="graph"><span class="nd-t">Everything is written to a graph</span></button><span class="chips"><button type="button" class="chip" data-tool="kuzu" data-m="K" aria-pressed="false">Kùzu</button></span></li>
+        <li class="detail" id="detail" aria-live="polite">
+          <p class="meta" id="d-k">Step</p>
+          <h3 class="d-t" id="d-t">Your website</h3>
+          <p class="d-s" id="d-s">You paste one link. That is all Earshot asks for.</p>
+          <p class="d-n num" id="d-n"></p>
+          <p class="chips" id="d-c"></p>
+        </li>
+      </ol>
+    </div>
+
+    <div class="built"><p class="label bare">How it was built</p>
+      <p class="chips"><button type="button" class="chip" data-tool="band" data-m="B" aria-pressed="false">Band</button><button type="button" class="chip" data-tool="claudecode" data-m="CC" aria-pressed="false">Claude Code</button></p>
+      <p class="built-line" id="built-line">Four agents planned, built and reviewed a rule.</p></div>
   </div></section>
 
-  <section class="sec reveal" id="how"><div class="wrap">
-    <div class="sec-head"><p class="label">How it works</p><h2 class="title">Seven agents, <em>one line</em></h2></div>
-    <ul class="rows">
-      <li><div class="r"><span class="r-k">01</span><span class="r-t"><i>Planner</i> reads your site</span><span class="r-n">Names the customer</span></div></li>
-      <li><div class="r"><span class="r-k">02</span><span class="r-t"><i>Scout</i> listens where they write</span><span class="r-n">Posts, with links</span></div></li>
-      <li><div class="r"><span class="r-k">03</span><span class="r-t"><i>Qualifier</i> weighs each post</span><span class="r-n">Keeps the few</span></div></li>
-      <li><div class="r"><span class="r-k">04</span><span class="r-t"><i>Enricher</i> finds a way to reach them</span><span class="r-n">Or says none</span></div></li>
-      <li><div class="r"><span class="r-k">05</span><span class="r-t"><i>Writer</i> drafts from their words</span><span class="r-n">Quotes them</span></div></li>
-      <li><div class="r"><span class="r-k">06</span><span class="r-t"><i>Reviewer</i> checks every claim</span><span class="r-n">Second model</span></div></li>
-      <li><div class="r"><span class="r-k">07</span><span class="r-t"><i>Sender</i> releases what you approved</span><span class="r-n">Every gate passes</span></div></li>
-    </ul>
+  <section class="sec" id="answer" aria-labelledby="answer-h"><div class="wrap">
+    <div class="sec-head"><p class="label">The answer</p><h2 class="title" id="answer-h">Who is your <em>customer</em>?</h2></div>
+    <div class="mini">
+      <p class="mini-bar meta">Example: today&rsquo;s run on flexprice.io</p>
+      <div class="mini-hero">
+        <p class="label bare">Your customer</p>
+        <p class="display mini-line">Backend engineers <em>building billing</em></p>
+        <div class="logos"><p class="label bare">Heard from <span class="num">39</span> people on</p>
+          <ul class="logo-row"><li>github.com</li><li>g2.com</li><li>reddit.com</li><li>ycombinator.com</li><li>stackoverflow.com</li><li>indiehackers.com</li></ul></div>
+      </div>
+      <ul class="rows story" id="mini-story">
+        <li class="st"><button type="button" class="r st-btn" aria-expanded="false" aria-controls="ms-1"><span class="r-k num">01</span><span class="r-t">Read <em>flexprice.io</em></span><span class="r-n">Usage billing<span class="chev" aria-hidden="true">&#8964;</span></span></button>
+          <div class="st-more" id="ms-1" inert><div><ul class="st-lines"><li>Named who buys, what hurts them and where they write.</li></ul></div></div></li>
+        <li class="st"><button type="button" class="r st-btn" aria-expanded="false" aria-controls="ms-2"><span class="r-k num">02</span><span class="r-t">Listened on <em>6 sites</em></span><span class="r-n"><span><span class="num">463</span> posts read</span><span class="chev" aria-hidden="true">&#8964;</span></span></button>
+          <div class="st-more" id="ms-2" inert><div><ul class="st-lines"><li>Three public trackers plus forum posts.</li></ul></div></div></li>
+        <li class="st"><button type="button" class="r st-btn" aria-expanded="false" aria-controls="ms-3"><span class="r-k num">03</span><span class="r-t">Found <em>39 people</em> with this problem</span><span class="r-n">matched by meaning<span class="chev" aria-hidden="true">&#8964;</span></span></button>
+          <div class="st-more" id="ms-3" inert><div><ul class="st-lines"><li>Each post was compared with the pains by what it means, not by its words.</li></ul></div></div></li>
+        <li class="st"><button type="button" class="r st-btn" aria-expanded="false" aria-controls="ms-4"><span class="r-k num">04</span><span class="r-t">Kept <em>6</em> worth writing to</span><span class="r-n">19 dropped as not a fit<span class="chev" aria-hidden="true">&#8964;</span></span></button>
+          <div class="st-more" id="ms-4" inert><div><ul class="st-lines"><li>Posts with no named author stay as evidence only.</li></ul></div></div></li>
+        <li class="st"><button type="button" class="r st-btn" aria-expanded="false" aria-controls="ms-5"><span class="r-k num">05</span><span class="r-t">Wrote <em>6 messages</em>. They wait for you.</span><span class="r-n"><span class="chev" aria-hidden="true">&#8964;</span></span></button>
+          <div class="st-more" id="ms-5" inert><div><ul class="st-lines"><li>A second model checked every message; the Writer gets one rewrite.</li><li>Nothing is sent to the person in this demo.</li></ul></div></div></li>
+      </ul>
+      <div class="mini-act"><a class="btn" href="/app">Find my customers</a></div>
+    </div>
   </div></section>
 
-  <section class="sec reveal" id="limits"><div class="wrap">
-    <div class="sec-head"><p class="label">Limits</p><h2 class="title">What it <em>won&rsquo;t do</em></h2></div>
+  <section class="sec" id="limits" aria-labelledby="limits-h"><div class="wrap">
+    <div class="sec-head"><p class="label">Limits</p><h2 class="title" id="limits-h">What it <em>won&rsquo;t do</em></h2></div>
     <ul class="rows">
       <li><div class="r"><span class="r-k">01</span><span class="r-t"><i>Pad</i> a list when buyers stay quiet</span><span class="r-n">Declines at intake</span></div></li>
       <li><div class="r"><span class="r-k">02</span><span class="r-t"><i>Email</i> a lead in this build</span><span class="r-n">Test inbox only</span></div></li>
@@ -67,12 +112,12 @@
     </ul>
   </div></section>
 
-  <section class="sec reveal" style="text-align:center"><div class="wrap">
+  <section class="sec close" aria-label="Start"><div class="wrap">
     <h2 class="display">Read what they wrote. <em>Then write back.</em></h2>
     <div class="hero-act"><a class="btn" href="/app">Find my customers</a></div>
   </div></section>
 </main>
 
-<footer class="foot"><p>Built at HackwithBay 4.0, San Francisco, <time datetime="2026-11-24">24 November 2026</time>.</p></footer>
+<footer class="foot"><p>Built at HackwithBay 4.0, San Francisco, <time datetime="2026-11-24">24 November 2026</time>. <a class="ul" href="https://github.com/vihuynh72/hackwithbay">Source on GitHub</a></p></footer>
 </body>
 </html>
