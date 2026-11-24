@@ -198,3 +198,12 @@ def test_drop_sellers_ignores_names_under_four_characters_and_other_hosts_paths(
 def test_x_system_paths_are_not_authors():
     assert w._author("https://x.com/i/status/123") == ""
     assert w._author("https://x.com/ada_l/status/123") == "ada_l"
+
+
+def test_failed_searches_are_counted_not_hidden():
+    def flaky(q, d):
+        if "late" in q:
+            raise RuntimeError("tvly-secret")
+        return []
+    assert w.find_voices(["late invoices", "wrong totals"], [], search=flaky) == []
+    assert w.last == {"queries": 2, "failed": 1}

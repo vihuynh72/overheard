@@ -137,7 +137,7 @@ def test_build_leads_carries_channels_learned_pains_and_says_so(moss, monkeypatc
     monkeypatch.setattr(pipeline, "gh", lambda path, **k: {})
     monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: ISSUES)
     monkeypatch.setattr(scout_web, "find_voices", find_voices)
-    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a: {"email": "", "email_status": "", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: {"email": "", "email_status": "", "steps": ["x"]})
     monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
     monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
 
@@ -171,7 +171,7 @@ def test_build_leads_without_channels_falls_back_and_learns_nothing_when_refine_
     monkeypatch.setattr(pipeline, "gh", lambda path, **k: {})
     monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: ISSUES)
     monkeypatch.setattr(scout_web, "find_voices", lambda pains, areas, domains=None: got.update(a=areas, d=domains) or [])
-    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a: {"email": "", "email_status": "", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: {"email": "", "email_status": "", "steps": ["x"]})
     monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
     monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
 

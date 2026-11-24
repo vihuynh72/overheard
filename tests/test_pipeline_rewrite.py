@@ -24,6 +24,15 @@ def test_guard_strips_numbers_and_money_the_person_never_wrote():
     assert out == "Hi Derek, you raised invoice drift. Would a call help?"
 
 
+def test_guard_keeps_a_suffixed_number_the_person_wrote_and_cuts_a_changed_one():
+    # Found by scripts/eval_tools.py: "40k" was read as a bare "40" and an honest sentence was cut.
+    lead = {**LEAD, "signals": [{**LEAD["signals"][0], "body": "We send about 40k usage events a day and 2m on peak."}]}
+    body = "You send about 40k usage events a day. You see 2m on peak days. Would a short call help?"
+    assert reviewer.guard(body, reviewer.full_evidence(lead)) == (body, [])
+    changed = "You send about 50k usage events a day. You raised late events. Would a short call help?"
+    assert reviewer.guard(changed, reviewer.full_evidence(lead))[1] == ["You send about 50k usage events a day."]
+
+
 def test_guard_leaves_numbers_not_about_the_recipient():
     body = "You raised invoice drift. Our tool handles 10M events a day. Would a call help?"
     assert reviewer.guard(body, reviewer.full_evidence(LEAD))[1] == []

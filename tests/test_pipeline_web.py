@@ -23,7 +23,7 @@ def test_web_voices_get_a_reserved_share(monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: issues)
     monkeypatch.setattr(pipeline, "match_pains", lambda *a: _done({i["id"]: ("pain one", 0.9) for i in issues}))
     monkeypatch.setattr(scout_web, "find_voices", lambda pains, areas, domains=None: voices)
-    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a: {"email": "", "email_status": "", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: {"email": "", "email_status": "", "steps": ["x"]})
     monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
     monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
 
@@ -53,7 +53,7 @@ def test_authorless_web_posts_get_no_draft(monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_issues", lambda repo: issues)
     monkeypatch.setattr(pipeline, "match_pains", lambda *a: _done({"o/r#1": ("pain one", 0.9)}))
     monkeypatch.setattr(scout_web, "find_voices", lambda pains, areas, domains=None: voices)
-    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a: {"email": "", "email_status": "", "steps": ["x"]})
+    monkeypatch.setattr(pipeline.enrich, "enrich", lambda *a, **k: {"email": "", "email_status": "", "steps": ["x"]})
     monkeypatch.setattr(pipeline.billing, "gate", lambda *a: {"allowed": True})
     monkeypatch.setattr(pipeline.billing, "record", lambda *a, **k: None)
     asked = []

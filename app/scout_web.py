@@ -135,6 +135,9 @@ def _tavily_search(per_query: int):
     return search
 
 
+last = {"queries": 0, "failed": 0}  # the most recent sweep, so the caller can say when searches failed
+
+
 def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None,
                 per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None) -> list[dict]:
     if search is None:
@@ -143,10 +146,13 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
         search = _tavily_search(per_query)
     domains = clean_domains(domains) or _domains()  # the Planner's channels, else every known source
     best: dict[str, dict] = {}
-    for q in queries(pains, areas):
+    qs = queries(pains, areas)
+    last.update(queries=len(qs), failed=0)
+    for q in qs:
         try:
             results = search(q["query"], domains)
-        except Exception:  # one failed query never stops the sweep; shortcut: not logged, so no key can leak via an error string
+        except Exception:  # one failed query never stops the sweep; counted in `last`, never its message (it could carry the key)
+            last["failed"] += 1
             continue
         for r in results or []:
             url = (r.get("url") or "").strip()

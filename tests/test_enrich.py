@@ -145,3 +145,67 @@ def test_enrich_never_raises():
 
     r = e.enrich("Ada", "Nozzle", search=bad)
     assert r["email"] == "" and KEY not in " ".join(r["steps"])
+
+
+def hunter(routes: dict, seen: list):
+    """Mock Hunter by path suffix; records each path called."""
+    def h(req):
+        path = req.url.path.rsplit("/", 1)[-1]
+        seen.append(path)
+        return httpx.Response(200, json=routes[path])
+    return client(h)
+
+
+MISS = {"data": {"email": None}}
+
+
+def test_blog_domain_is_used_when_company_is_missing_and_no_search_runs():
+    seen = []
+    r = e.enrich("Ada Lovelace", "", blog="https://ada.dev", search=lambda q: pytest.fail("searched"),
+                 client=hunter({"email-finder": FINDER}, seen))
+    assert (r["domain"], r["email"], r["email_status"]) == ("ada.dev", "ada@nozzle.io", "valid")
+    assert "domain ada.dev from GitHub profile website" in r["steps"]
+
+
+def test_hosted_blog_is_not_a_domain():
+    assert e.blog_domain("https://ada.github.io") == "" and e.blog_domain("medium.com/@ada") == ""
+    assert e.blog_domain("http://derekperkins.com") == "derekperkins.com"
+    assert e.enrich("Ada Lovelace", "", blog="https://ada.github.io")["steps"] == ["no company on profile, skipped"]
+
+
+def test_finder_miss_falls_back_to_the_person_listed_in_domain_search():
+    seen = []
+    ds = {"data": {"pattern": "{first}", "emails": [
+        {"value": "bob@nozzle.io", "first_name": "Bob", "last_name": "Jones", "verification": {"status": "valid"}},
+        {"value": "ada.l@nozzle.io", "first_name": "Ada", "last_name": "Lovelace", "position": "CTO",
+         "verification": {"status": "valid"}}]}}
+    r = e.enrich("Ada Lovelace", "nozzle.io", client=hunter({"email-finder": MISS, "domain-search": ds}, seen))
+    assert (r["email"], r["email_status"], r["position"]) == ("ada.l@nozzle.io", "valid", "CTO")
+    assert seen == ["email-finder", "domain-search"]
+
+
+def test_finder_miss_fills_the_pattern_and_keeps_it_only_when_verified():
+    seen = []
+    ds = {"data": {"pattern": "{f}{last}", "emails": []}}
+    r = e.enrich("Ádá Lovelace", "nozzle.io", client=hunter({"email-finder": MISS, "domain-search": ds, "email-verifier": VERIFIER}, seen))
+    assert (r["email"], r["email_status"]) == ("alovelace@nozzle.io", "valid")
+    assert seen == ["email-finder", "domain-search", "email-verifier"] and len(seen) <= e.MAX_HUNTER_CALLS
+
+    bad = {"data": {"status": "invalid", "score": 0}}
+    r = e.enrich("Ada Lovelace", "nozzle.io", client=hunter({"email-finder": MISS, "domain-search": ds, "email-verifier": bad}, []))
+    assert r["email"] == "" and "came back invalid, not used" in r["steps"][-1]
+
+
+def test_pattern_needs_a_two_part_name():
+    assert e.from_pattern("{first}.{last}", "deef", "x.io") == ""
+    assert e.from_pattern("{first}.{last}", "Nils T", "x.io") == ""
+    assert e.from_pattern("{first}.{last}", "Raj Siva-Rajah", "x.io") == "raj.sivarajah@x.io"
+
+
+def test_company_domain_skips_directories_whose_host_lacks_the_company_name():
+    # Seen live: Tavily ranked tavily.com/knowledge and leadiq.com above danfoss.com for "Danfoss".
+    results = [{"url": "https://tavily.com/knowledge/company/x", "title": "Danfoss"},
+               {"url": "https://leadiq.com/c/danfoss/1", "title": "Danfoss Company Overview"},
+               {"url": "https://www.danfoss.com/en-us/products", "title": "Products | Danfoss"}]
+    assert e.company_domain("@Danfoss", search=lambda q: results)["domain"] == "danfoss.com"
+    assert e.company_domain("Method Maker Ltd", search=lambda q: [{"url": "https://methodmaker.co.nz"}])["domain"] == "methodmaker.co.nz"

@@ -301,6 +301,8 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     if domains:
         say("Planner → Scout: listening on " + (", ".join(domains[:-1]) + " and " if len(domains) > 1 else "") + domains[-1])
     voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains)
+    if scout_web.last["failed"]:
+        say(f"Scout: {scout_web.last['failed']} of {scout_web.last['queries']} web searches failed; those sources were not heard")
     sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
     kept = scout_web.drop_sellers(voices, sellers)
     if len(kept) < len(voices):
@@ -355,11 +357,11 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
             found = {"email": public, "email_status": "", "steps": ["contact lookup off for this run"]}
         elif not (gate := billing.gate("lead.enriched", login, pre))["allowed"]:
             found = {"email": public, "email_status": "", "steps": [f"enrichment not run: {gate['reason']}"]}
-        elif pre == "C" and not public:
-            # A paid email search is only worth it for a lead we would actually write to.
-            found = {"email": "", "email_status": "", "steps": ["weak fit: email search skipped to save credits"]}
+        elif pre == "C" and not public and not company and not profile.get("blog"):
+            # We write to this person, so we look them up, unless the profile gives the search nothing to start from.
+            found = {"email": "", "email_status": "", "steps": ["nothing on the profile to search from: lookup skipped"]}
         else:
-            found = enrich.enrich(name, company, public)
+            found = enrich.enrich(name, company, public, blog=profile.get("blog") or "")
             billing.record("lead.enriched", login, tier=pre)
         score = scoring.score(ql.fit, top, newest, today, found.get("email_status") or "")
         leads.append(dict(

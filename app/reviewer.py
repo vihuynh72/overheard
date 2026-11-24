@@ -104,7 +104,8 @@ def snap_judge(state: str, questions: dict[str, str], *, client: httpx.Client | 
 # --- Repair: what the checks above detect, these fix, each within a fixed bound ---------------
 
 MAX_REWRITES_PER_DRAFT = 1  # exit condition: one rewrite and one re-review, then the first verdict stands
-_NUMBER = re.compile(r"[$€£]\s?\d[\d,.]*\s?[kmb]?(?!\w)|\d[\d,.]*\s?%|\d[\d,.]*", re.I)
+# The k/m/b suffix belongs to the bare number too: "40k" the person wrote must match "40k", not a bare "40".
+_NUMBER = re.compile(r"[$€£]\s?\d[\d,.]*\s?[kmb]?(?!\w)|\d[\d,.]*\s?%|\d[\d,.]*(?:[kmb](?!\w))?", re.I)
 
 
 def _plain(text: str) -> str:
