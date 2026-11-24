@@ -11,3 +11,5 @@ graphify-out/
 .band/
 demo/work/
 demo/node_modules/
+demo/**/node_modules/
+demo/film/

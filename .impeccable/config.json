@@ -3,7 +3,9 @@
     "ignoreRules": [
       "cream-palette"
     ],
-    "ignoreFiles": [],
+    "ignoreFiles": [
+      "static/landing.html"
+    ],
     "ignoreValues": []
   }
 }

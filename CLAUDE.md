@@ -8,9 +8,9 @@
 - **Hard constraints.** Hacking 11:00–15:30 PT with lunch 12:00–13:00; submission due 15:30; top 5 present at 16:00. Deliverables: working deployment, public repo with setup docs, 2–3 minute demo video, system design document. The repo will be public, so secrets stay in `.env` (gitignored) and never go in code or docs.
 - **Pain and user.** Outbound tools send irrelevant mail and miss the right person, because leads get filtered in or out wrongly. The user is a founder at a small or mid-sized business. The demo client is Flexprice.
 - **Build shape.** Deep on one edge, thin on the rest of the spec; both the Band and Flexprice bonuses; solo builder.
-- **Edge.** Leads come from public GitHub issues on the product's and its open-source competitors' repos, matched by meaning (Moss) to pain statements inferred from the product description. Every lead links to what the person wrote. Planned next: an ICP accuracy score from rediscovering hidden known buyers.
-- **Stack.** Python 3.12, FastAPI (`app/main.py`), pipeline in `app/pipeline.py`, Kùzu embedded graph in `app/store.py`, Moss for search, Claude Sonnet 5.5 via the Anthropic SDK. The UI is `static/` (plain HTML, CSS, JS, no build step); design tokens live in `static/tokens.css` and every colour and font must come from them.
-- **Run.** `uv venv --python 3.12 && uv pip install -r requirements.txt`, then `.venv/bin/uvicorn app.main:app --port 8765` with the variables from `.env.example` set.
+- **Edge.** Leads come from public GitHub issues on the product's and its open-source competitors' repos, matched by meaning (Moss) to pain statements inferred from the product description. Every lead links to what the person wrote. The Planner also chooses where to listen (channels, process areas), and the Scout learns up to three pains from the best real posts. The hidden-known-buyers accuracy score was dropped (0 of 13 found).
+- **Stack.** Python 3.12, FastAPI (`app/main.py`), pipeline in `app/pipeline.py`, Kùzu embedded graph in `app/store.py`, Moss for search, Claude Sonnet 5.5 via the Anthropic SDK. An MCP server is mounted at `/mcp` (`app/mcp_server.py`, six tools, no decision tools). The UI is `static/` (plain HTML, CSS, JS, no build step): three sections, Customer, People and Activity; design tokens live in `static/tokens.css` and every colour and font must come from them. Deployed on Railway at https://earshot-production.up.railway.app.
+- **Run.** `uv venv --python 3.12 && uv pip install -r requirements.txt`, then `.venv/bin/uvicorn app.main:app --port 8765` with the variables from `.env.example` set. Tests: `.venv/bin/python -m pytest -q`. The public copy has no sign-in; `MAX_RUNS_PER_HOUR` and `MIN_RUN_GAP_SECONDS` cap run starts.
 - **Earlier research.** `/Users/vihuynh/Desktop/claude/docs/brainstorming/` (start with `INDEX.md` and `TOP-10.md`). The spec is at `/Users/vihuynh/Downloads/AI GTM Engine - Product & Technical Requirements Specification.md`.
 
 ## First principles of this product
@@ -27,7 +27,7 @@ Outbound fails for one reason: the sender does not know whether this person has 
 
 | Layer | What lives here | Where |
 |---|---|---|
-| Impossible by construction | No message is ever addressed to a lead in this build; the AI cursor cannot press anything that spends money or decides for the human; the Sender releases nothing unless policy, review and the credit gate all pass | `app/mailer.py`, `static/pilot.js` denylist, `app/autopilot.py` `run_sender` |
+| Impossible by construction | No message is ever addressed to a lead in this build; the MCP server exposes no tool that decides or spends; run starts are capped by a run budget; a web lead with no named author is always held; the Sender releases nothing unless policy, review and the credit gate all pass | `app/mailer.py`, `app/mcp_server.py`, `app/main.py` run budget, `app/policy.py`, `app/autopilot.py` `run_sender` |
 | Checked on every run | The twelve lead rules, the second-model claim check, the fit check at intake, the score floor | `app/checks.py`, `app/reviewer.py`, `app/pipeline.py` |
 | Checked across runs | Ten product types simulated; failure patterns written to the lessons ledger; a fixed lesson that recurs is flagged | `app/simulate.py`, `app/lessons.py` |
 | Earned | Trust gates decide the autonomy level | `app/trust.py` |

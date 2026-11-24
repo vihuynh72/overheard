@@ -1,5 +1,10 @@
 # Band Desktop integration
 
+## What actually happened
+
+The record is [band-run.md](band-run.md). On 2026-11-24 four Band-hosted Claude Code agents (Planner, Builder, Reviewer, Security) planned, wrote and reviewed one real change: a web lead with no named author is never released. Every message went out in read-only plan mode, so the agents read files and edited nothing. An operator session relayed the messages through `band chats send` and `band chats watch`, and applied the Builder's diff with `git apply`. No permission prompt was approved by automation; the one prompt that appeared was cancelled when the stuck Planner chat was stopped. The rule is now in `app/policy.py`. The six-step demo below (`scripts/band/demo.sh`) is the earlier design, with a human Yes or No at each handoff; it was smoke-tested but a full agent-to-agent handoff through it was not observed.
+
+
 Band bonus (+20) in the judging text: specialized agents working together, a human deciding the risky step, and the shared message stream, tokens and cost visible to everyone.
 
 ## What Band is in version 0.70

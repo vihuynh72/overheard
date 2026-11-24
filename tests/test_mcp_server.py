@@ -38,6 +38,7 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setitem(pipeline.state, "running", False)
     monkeypatch.setitem(pipeline.state, "error", "")
     monkeypatch.setitem(pipeline.state, "log", [f"step {n}" for n in range(20)])
+    main.reset_run_budget()  # the run budget is process-wide; start each test with it empty
     return leads
 
 

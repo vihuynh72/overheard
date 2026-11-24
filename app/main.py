@@ -1,6 +1,8 @@
 """HTTP API and the single-page UI. No auth: shortcut for the demo, add it before real users."""
 import os
 import threading
+import time
+from collections import deque
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -88,11 +90,45 @@ def _run(description: str, product_repo: str, target: str = "") -> None:
         pipeline.say(f"Failed after the run: {pipeline.state['error']}")
 
 
+# The public copy has no sign-in, so a run budget stands between strangers and the owner's credits.
+MAX_RUNS_PER_HOUR = int(os.environ.get("MAX_RUNS_PER_HOUR", "6"))
+MIN_RUN_GAP_SECONDS = float(os.environ.get("MIN_RUN_GAP_SECONDS", "20"))
+_starts: deque[float] = deque()  # time.monotonic() of each run that started in the last hour
+_start_lock = threading.Lock()
+
+
+def reset_run_budget() -> None:
+    _starts.clear()
+
+
+def _wait_phrase(seconds: float) -> str:
+    seconds = max(1, int(seconds + 0.999))
+    return f"{seconds} seconds" if seconds < 90 else f"{(seconds + 59) // 60} minutes"
+
+
+def _refusal(now: float) -> str:
+    """A plain sentence saying when to try again, or "" if a run may start now."""
+    while _starts and now - _starts[0] >= 3600:
+        _starts.popleft()
+    if _starts and now - _starts[-1] < MIN_RUN_GAP_SECONDS:
+        return f"A run just started. Try again in {_wait_phrase(MIN_RUN_GAP_SECONDS - (now - _starts[-1]))}."
+    if len(_starts) >= MAX_RUNS_PER_HOUR:
+        return (f"This copy allows {MAX_RUNS_PER_HOUR} runs an hour to protect its credits. "
+                f"Try again in {_wait_phrase(3600 - (now - _starts[0]))}.")
+    return ""
+
+
 @app.post("/api/run", status_code=202)
 def run(body: RunIn):
-    if pipeline.state["running"]:
-        raise HTTPException(409, "a run is already in progress")
-    pipeline.state["running"] = True  # set here so a second click cannot race the thread start
+    """The one way a run starts: the web route and the MCP tool find_leads both come here."""
+    with _start_lock:
+        if pipeline.state["running"]:
+            raise HTTPException(409, "a run is already in progress")
+        now = time.monotonic()
+        if reason := _refusal(now):  # a refused start spends no budget; the page shows a non-2xx detail as the reason
+            raise HTTPException(429, reason)
+        _starts.append(now)
+        pipeline.state["running"] = True  # set here so a second click cannot race the thread start
     threading.Thread(target=_run, args=(body.description, body.product_repo, body.target.strip()), daemon=True).start()
     return {"started": True}
 

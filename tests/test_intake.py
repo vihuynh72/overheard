@@ -178,6 +178,8 @@ def api(monkeypatch):
     monkeypatch.setattr(main.threading, "Thread", Inline)
     monkeypatch.setitem(pipeline.state, "running", False)
     monkeypatch.setitem(pipeline.state, "error", "")
+    monkeypatch.setattr(main, "MIN_RUN_GAP_SECONDS", 0)  # these tests start several runs in a row
+    main.reset_run_budget()
     return TestClient(main.app), calls
 
 
