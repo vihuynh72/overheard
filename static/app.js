@@ -10,7 +10,7 @@ const SECTIONS = {leads: "People", activity: "Activity"};
 const MOVED = {floor: "home", profile: "home", map: "leads", pipeline: "leads", proof: "activity"};
 const EMAIL = {valid: "verified", accept_all: "domain accepts all mail", invalid: "failed verification", webmail: "personal webmail", disposable: "disposable address", unknown: "unverified", pending: "verifying"};
 
-const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", error: "", detailKey: "", shown: "", open: {},
+const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", error: "", detailKey: "", shown: "", open: {}, reading: null, confirm: null,
   head: "", ticked: new Set(), ledgerAll: false, entered: new Set(), moving: null, prof: 0, layout: "List"};
 try { if (localStorage.getItem("earshot.layout") === "Board") ui.layout = "Board"; } catch (e) { /* storage blocked: list it is */ }
 
@@ -107,10 +107,12 @@ function story(d, example) {
   const msgs = leads.filter(l => !noAuthor(l)), pending = msgs.filter(l => (l.draft_status || "pending") === "pending").length;
   const sells = String(i.product || "").replace(/^[^:]{1,40}:\s*/, "").split(/\s+/).slice(0, 6).join(" ").replace(/[,;:.]$/, "");
   const drops = (d.status.log || []).filter(l => /^(Qualifier|Scout): dropped/.test(l)).map(l => cap(PLAIN(strip(l))));
+  let conf = "";  // what the founder confirmed before this run; the server does not keep it
+  try { conf = !example && site ? sessionStorage.getItem("overheard.focus." + site) || "" : ""; } catch (e) { /* storage blocked */ }
   const more = (lines, href, label) => `<ul class="st-lines">${lines.map(t => `<li>${t}</li>`).join("")}</ul>${href ? `<a class="linkish" href="${href}">${label} →</a>` : ""}`;
   return [
     {t: site ? `Read <em>${esc(site)}</em>` : "Read <em>your description</em>", n: sells ? esc(cap(sells)) : "",
-      more: more(vals(i.pains).slice(0, 3).map(p => esc(headline(p))), "#pains", "What they struggle with")},
+      more: more([...(conf ? [`You confirmed: ${esc(conf)}`] : []), ...vals(i.pains).slice(0, 3).map(p => esc(headline(p)))], "#pains", "What they struggle with")},
     {t: chans.length ? `Listened on <em>${plural(chans.length, "site", "sites")}</em>` : "Listened where they <em>write</em>", n: scan ? `${scan[2]} posts read` : "",
       more: more(chans.slice(0, 6).map(c => `<b>${esc(c.domain.replace(/^(www|news)\./, ""))}</b> ${esc(c.why || "")}`), example ? "" : "#step-2", "Where it listened")},
     {t: scan ? `Found <em>${scan[3]} people</em> with this problem` : "Found people <em>with this problem</em>", n: "matched by meaning, not keywords",
@@ -206,6 +208,7 @@ function fullProfile(i, said) {
 
 // Arrival: one promise, one field, three steps.
 function intakeForm() {
+  const busy = !!ui.reading;
   const back = ui.data.leads.length ? `<button type="button" class="linkish" data-restart-off>Back to your results</button>` : `<button type="button" class="linkish" data-example>See an example</button>`;
   return `<header class="hero"><div class="wrap">
     <p class="label">Overheard</p>
@@ -213,10 +216,10 @@ function intakeForm() {
     <p class="hero-line">Paste your website. We find the people <em>already</em> describing your problem.</p>
     <form class="intake" id="intake" novalidate>
       <label for="target" class="visually-hidden">Your website</label>
-      <div class="field-pill"><input type="text" id="target" placeholder="yourcompany.com" maxlength="200" autocomplete="url" inputmode="url" value="${esc(ui.target)}"
-        ${ui.error ? `aria-invalid="true" aria-describedby="intake-err"` : ""}><button class="btn">Find my customers</button></div>
+      <div class="field-pill"><input type="text" id="target" placeholder="yourcompany.com" maxlength="200" autocomplete="url" inputmode="url" value="${esc(ui.target)}"${busy ? " disabled" : ""}
+        ${ui.error ? `aria-invalid="true" aria-describedby="intake-err"` : ""}><button class="btn"${busy ? ` aria-busy="true"` : ""}>${busy ? `${GLYPH}Reading your site…` : "Find my customers"}</button></div>
       ${ui.error ? `<p class="error" id="intake-err" role="alert">${esc(ui.error)}</p>` : ""}
-      <p class="hint" style="margin-top:var(--space-3)">About two minutes · ${back}</p>
+      <p class="hint" style="margin-top:var(--space-3)" aria-live="polite">${busy ? `<button type="button" class="linkish" data-confirm-back>Cancel</button>` : `About two minutes · ${back}`}</p>
     </form>
     <details class="nosite" data-fold="manual" ${ui.open.manual ? "open" : ""}><summary>No website?</summary>
       <form class="intake-manual" id="intake-manual" novalidate>
@@ -229,6 +232,77 @@ function intakeForm() {
     <ul class="rows"><li><div class="r"><span class="r-k">01</span><span class="r-t">Reads your site</span><span class="r-n">What you sell</span></div></li>
     <li><div class="r"><span class="r-k">02</span><span class="r-t">Listens where buyers <i>write</i></span><span class="r-n">GitHub, forums, reviews</span></div></li>
     <li><div class="r"><span class="r-k">03</span><span class="r-t">Shows who they are</span><span class="r-n">You say yes or no</span></div></li></ul></div></section>`;
+}
+
+// The second beat: what Overheard believes you sell, asked only as hard as it doubts.
+const confirmKind = c => !c.u || !c.u.offerings.length ? "none" : c.u.offerings.length === 1 && c.u.confidence >= 0.75 ? "one" : "choose";
+function confirmView() {
+  const c = ui.confirm, u = c.u, kind = confirmKind(c);
+  const say = label => `<div class="field-pill"><label for="say" class="visually-hidden">Say it in a sentence</label><input type="text" id="say" placeholder="Say it in a sentence" maxlength="300" autocomplete="off" value="${esc(c.say)}">${label ? `<button class="btn">${label}</button>` : ""}</div>`;
+  const head = kind === "none" ? `<h1 class="display">What do you <em>sell</em>?</h1>`
+    : `<h1 class="display">${esc(u.product_name)}${u.category ? `, <em>${esc(u.category)}</em>` : ""}</h1>`;
+  const line = kind === "none" ? `I could not tell what you sell from that site.${u?.ambiguity ? ` ${esc(u.ambiguity)}` : ""}` : esc(u.one_liner);
+  let body;
+  if (kind === "none") body = say("Find customers for this");
+  else if (kind === "one") body = c.other ? say("Find customers for this")
+    : `<div class="hero-act"><button class="btn" id="cf-yes">Yes, find my customers</button><button type="button" class="linkish" data-not-quite>Not quite</button></div>`;
+  else {
+    const row = (v, name, sub) => `<li><label class="r"><span class="r-k"><input type="radio" name="offer" value="${v}"${String(c.pick) === String(v) ? " checked" : ""}></span><span class="r-t">${esc(name)}${sub ? `<small>${esc(sub)}</small>` : ""}</span></label></li>`;
+    body = `${u.ambiguity ? `<p class="hint cf-why">${esc(u.ambiguity)}</p>` : ""}
+      <ul class="rows cf-opts" role="radiogroup" aria-label="What you sell">${u.offerings.map((o, k) => row(k, o.name, o.one_liner)).join("")}${row("other", "Something else", "")}</ul>
+      <div id="cf-say"${c.pick === "other" ? "" : " hidden"}>${say("")}</div>
+      <div class="hero-act"><button class="btn">Find customers for this</button></div>`;
+  }
+  return `<header class="hero"><div class="wrap" id="confirm"><p class="label">Is this what you sell?</p>
+    <div aria-live="polite">${head}</div>
+    <p class="hero-line cf-line">${line}</p>
+    ${c.pages ? `<p class="hint" style="margin-top:var(--space-3)">Read ${plural(c.pages, "page", "pages")} of ${esc(c.site)}</p>` : ""}
+    <form id="confirm-form" novalidate>${body}
+      ${c.error ? `<p class="error" role="alert">${esc(c.error)}</p>` : ""}
+      <p class="hint" style="margin-top:var(--space-6)"><button type="button" class="linkish" data-confirm-back>${kind === "none" ? "Try another website" : "Back"}</button></p>
+    </form></div></header>`;
+}
+// Drawn only here and on first entry, never by the poll, so a choice or a half-typed sentence stays put.
+function showConfirm() {
+  $("home-top").innerHTML = ""; renderHome();
+  ($("say")?.closest("[hidden]") ? null : $("say")) ?.focus() ?? ($("cf-yes") || document.querySelector("#confirm input:checked"))?.focus();
+}
+function confirmBack() {
+  ui.reading?.abort(); ui.reading = ui.confirm = null; ui.error = "";
+  $("home-top").innerHTML = ""; renderHome(); $("target")?.focus();
+}
+async function understandSite(target) {
+  const ac = ui.reading = new AbortController();
+  $("home-top").innerHTML = intakeForm();
+  let res = {understanding: null};  // any failure falls through to the plain question
+  try {
+    const r = await fetch("/api/understand", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({target}), signal: ac.signal});
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 422 || r.status === 429) ui.error = typeof j.detail === "string" ? j.detail : "That address was not accepted. Try again.";
+    else if (r.ok) res = j;
+  } catch (err) { /* cancelled or offline: handled below */ }
+  if (ui.reading !== ac) return;  // cancelled, or a newer reading took over
+  ui.reading = null;
+  if (ui.error) { $("home-top").innerHTML = intakeForm(); $("target")?.focus(); return; }
+  const u = res.understanding, site = hostOf(res.site || (/^https?:/.test(target) ? target : "https://" + target)) || target;
+  ui.confirm = {target, site, pages: res.pages_read || 0, u, pick: u ? u.primary : 0, other: false, say: "", error: "", busy: false};
+  showConfirm();
+}
+async function confirmRun(btn) {
+  const c = ui.confirm, kind = confirmKind(c), typed = c.say.trim();
+  if (c.busy) return;
+  const needsText = kind === "one" ? c.other : kind === "choose" && c.pick === "other";
+  if (needsText && !typed) { c.error = "Say what you sell in a sentence first."; return showConfirm(); }
+  const o = kind === "choose" && c.pick !== "other" ? c.u.offerings[c.pick] : null;
+  // Nothing is sent when the one clear reading is accepted as it stands.
+  const focus = (o ? `${o.name}: ${o.one_liner}` : kind === "one" && !c.other ? "" : typed).replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 300);
+  c.busy = true; btn?.setAttribute("aria-busy", "true");
+  try {
+    await api("/api/run", focus ? {target: c.target, focus} : {target: c.target});
+    try { focus ? sessionStorage.setItem("overheard.focus." + c.site, focus) : sessionStorage.removeItem("overheard.focus." + c.site); } catch (e) { /* storage blocked */ }
+    ui.confirm = null; ui.restart = ui.example = false; location.hash = "home";
+    $("home-top").innerHTML = ""; refresh(true);
+  } catch (err) { c.busy = false; c.error = err.message; showConfirm(); }
 }
 
 // Progress: the run's log, as five steps a founder recognises.
@@ -402,6 +476,7 @@ function failedView() {
 function homeMode() {
   const {leads, status} = ui.data;
   if (status.running) return "running";
+  if (ui.confirm) return "confirm";
   if (ui.example) return "example";
   if (ui.restart) return "fresh";
   if (!leads.length) return status.error ? "failed" : "fresh";
@@ -412,9 +487,11 @@ function renderHome() {
   const mode = homeMode(), slot = $("home-top");
   document.body.classList.toggle("is-fresh", mode !== "home");
   document.body.dataset.mode = mode;
-  if (mode === "fresh") {
+  if (mode === "running") ui.confirm = null;  // a run started elsewhere: the question is moot
+  if (mode === "confirm") { if (!slot.querySelector("#confirm")) slot.innerHTML = confirmView(); }
+  else if (mode === "fresh") {
     // Rebuild the form only when it is not being typed in.
-    if (!slot.querySelector("#intake") || !slot.contains(document.activeElement)) slot.innerHTML = intakeForm();
+    if (!slot.querySelector("#intake") || !(slot.contains(document.activeElement) || ui.reading)) slot.innerHTML = intakeForm();
   } else slot.innerHTML = mode === "running" ? runView() : mode === "failed" ? failedView() : homeCustomer(mode === "example" ? SAMPLE : ui.data, mode === "example");
   $("home-strip").innerHTML = mode === "home" ? homeStrip() : "";
   $("home-strip").hidden = mode !== "home";
@@ -644,12 +721,21 @@ document.addEventListener("input", e => {
   if (e.target.id === "desc") ui.desc = e.target.value;
   if (e.target.id === "repo") ui.repo = e.target.value;
   if (e.target.id === "target") ui.target = e.target.value;
+  if (e.target.id === "say" && ui.confirm) ui.confirm.say = e.target.value;
+});
+document.addEventListener("change", e => {
+  if (e.target.name !== "offer" || !ui.confirm) return;
+  const v = e.target.value; ui.confirm.pick = v === "other" ? v : +v;
+  $("cf-say").hidden = v !== "other"; if (v === "other") $("say").focus();
 });
 document.addEventListener("toggle", e => { if (e.target.dataset?.fold) ui.open[e.target.dataset.fold] = e.target.open; }, true);  // toggle does not bubble
 document.addEventListener("submit", async e => {
+  if (e.target.id === "confirm-form") { e.preventDefault(); return confirmRun(e.submitter); }
   if (e.target.id !== "intake" && e.target.id !== "intake-manual") return;
   e.preventDefault();
+  if (ui.reading) return;
   ui.error = "";
+  if (e.target.id === "intake" && ui.target.trim()) return understandSite(ui.target.trim());
   const typed = e.target.id === "intake-manual", target = ui.target.trim();
   try {
     if (typed && ui.desc.trim().length < 20) throw new Error("Describe it in at least 20 characters.");
@@ -665,6 +751,8 @@ document.addEventListener("click", async e => {
   const nav = e.target.closest(".tabs [data-view]");
   if (nav) { if (nav.dataset.view === "leads") { ui.selected = null; if (view() === "leads") renderPanel(); } return; }
   const flip = (k, v) => { ui[k] = v; ui.error = ""; $("home-top").innerHTML = ""; location.hash = "home"; renderHome(); };
+  if (e.target.closest("[data-confirm-back]")) return confirmBack();
+  if (e.target.closest("[data-not-quite]")) { ui.confirm.other = true; return showConfirm(); }
   if (e.target.closest("[data-example]")) return flip("example", true);
   if (e.target.closest("[data-example-off]")) { flip("example", false); return $("target")?.focus(); }
   if (e.target.closest("[data-restart]")) { flip("restart", true); return $("target")?.focus(); }
@@ -721,6 +809,7 @@ document.addEventListener("drop", e => { const c = e.target.closest?.("[data-dro
   if (ui.data.leads.find(l => l.login === login)?.stage !== c.dataset.drop) moveTo(login, c.dataset.drop); });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && ui.moving) { const m = ui.moving; ui.moving = null; renderPanel(); document.querySelector(`[data-move="${CSS.escape(m)}"]`)?.focus(); e.preventDefault(); return; }
+  if (e.key === "Escape" && (ui.confirm || ui.reading) && view() === "home" && !document.activeElement?.closest(".ask")) { confirmBack(); e.preventDefault(); return; }
   if (e.key !== "Escape" || view() === "home" || e.defaultPrevented || document.activeElement?.closest(".ask")) return;
   location.hash = "home";
 });

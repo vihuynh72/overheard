@@ -12,7 +12,7 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.responses import FileResponse, RedirectResponse, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel, Field, model_validator  # noqa: E402
+from pydantic import BaseModel, Field, field_validator, model_validator  # noqa: E402
 
 import logging  # noqa: E402
 
@@ -39,6 +39,14 @@ class RunIn(BaseModel):
     description: str = Field(default="", max_length=20000)
     product_repo: str = Field(default="", max_length=100, pattern=r"^$|^[\w.-]+/[\w.-]+$")
     target: str = Field(default="", max_length=200)  # a website or GitHub repository: Overheard reads the description itself
+    focus: str = Field(default="", max_length=300)  # the product the founder confirmed, when the site could mean several
+
+    @field_validator("focus")
+    @classmethod
+    def _plain_focus(cls, v: str) -> str:
+        if any(ord(c) < 32 or ord(c) == 127 for c in v):
+            raise ValueError("focus must be one line of plain text")
+        return v.strip()
 
     @model_validator(mode="after")
     def _needs_one(self):
@@ -68,7 +76,7 @@ def index():
     return FileResponse("static/index.html")
 
 
-def _run(description: str, product_repo: str, target: str = "") -> None:
+def _run(description: str, product_repo: str, target: str = "", focus: str = "") -> None:
     sources = None
     if target and len(description) < 20:
         pipeline.state.update(log=[], events=[], error="")
@@ -85,6 +93,8 @@ def _run(description: str, product_repo: str, target: str = "") -> None:
             pipeline.say(f"Planner: {read['reason']}")
             return
         description, sources = read["source_text"], read["sources"]
+        if focus:  # first line, so the Planner centres the customer profile on it
+            description = f"The founder confirmed the product to find customers for is: {focus}.\n\n{description}"
         product_repo = product_repo or read["repo"]
     pipeline.run(description, product_repo, review=autopilot.review_drafts, sources=sources,
                  keep_log=sources is not None)
@@ -124,6 +134,39 @@ def _refusal(now: float) -> str:
     return ""
 
 
+class TargetIn(BaseModel):
+    target: str = Field(max_length=200)
+
+
+MAX_UNDERSTANDS_PER_HOUR = 20
+_understands: deque[float] = deque()  # time.monotonic() of each reading in the last hour
+
+
+@app.post("/api/understand")
+def understand(body: TargetIn):
+    """Read the site and say what it sells, so the founder can confirm before a run. Starts nothing, stores nothing."""
+    try:
+        n = intake.normalize(body.target)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    with _start_lock:
+        now = time.monotonic()
+        while _understands and now - _understands[0] >= 3600:
+            _understands.popleft()
+        if len(_understands) >= MAX_UNDERSTANDS_PER_HOUR:
+            raise HTTPException(429, f"This copy reads {MAX_UNDERSTANDS_PER_HOUR} sites an hour. "
+                                     f"Try again in {_wait_phrase(3600 - (now - _understands[0]))}.")
+        _understands.append(now)
+    read = intake.read_product(body.target)
+    if read["status"] != "ok":
+        return {"site": n["url"], "understanding": None, "reason": read["reason"]}
+    out = {"site": n["url"], "pages_read": len(read["sources"]), **({"repo": read["repo"]} if read["repo"] else {})}
+    try:
+        return {**out, "understanding": intake.understand(read["source_text"], pipeline.ask)}
+    except Exception:  # no exception text reaches the page
+        return {**out, "understanding": None, "reason": "could not work out what that site sells"}
+
+
 @app.post("/api/run", status_code=202)
 def run(body: RunIn):
     """The one way a run starts: the web route and the MCP tool find_leads both come here."""
@@ -135,7 +178,8 @@ def run(body: RunIn):
             raise HTTPException(429, reason)
         _starts.append(now)
         pipeline.state["running"] = True  # set here so a second click cannot race the thread start
-    threading.Thread(target=_run, args=(body.description, body.product_repo, body.target.strip()), daemon=True).start()
+    threading.Thread(target=_run, args=(body.description, body.product_repo, body.target.strip(), *([body.focus] if body.focus else [])),
+                     daemon=True).start()
     return {"started": True}
 
 

@@ -9,6 +9,8 @@ import os
 import re
 from urllib.parse import urlparse
 
+from pydantic import BaseModel, Field
+
 MAX_TARGET = 200
 MAX_TEXT = 12000
 SUBPAGES = ("/pricing", "/docs", "/about")
@@ -161,3 +163,40 @@ def read_product(target: str, *, extract=None, fetch_repo=None) -> dict:
         return {"status": "ok", "source_text": text, "sources": [u for u, _ in pages], "repo": repo, "name_hint": name_hint}
     except Exception:  # never raise out of the public function
         return fail("could not read that address")
+
+
+# --- which product: the site may sell several things, so the reading is shown to the founder before a run ---
+
+class Offering(BaseModel):
+    name: str
+    one_liner: str
+
+
+class Understanding(BaseModel):
+    product_name: str
+    category: str = Field(description="two to four plain words naming the kind of product, lower case, e.g. usage-based billing")
+    one_liner: str = Field(description="one plain sentence, at most 25 words: what it is, for whom")
+    offerings: list[Offering] = Field(description="every distinct thing this site appears to sell, at most 5; a single-product company has exactly one")
+    primary: int = Field(description="index into offerings of the one the site emphasises most; 0 when offerings is empty")
+    confidence: float = Field(description="0 to 1: how sure that offerings[primary] is THE product to take to market")
+    ambiguity: str = Field(description="one short sentence saying what is unclear, or empty")
+    buyers_guess: str = Field(description="one short phrase: who buys it")
+
+
+UNDERSTAND_SYSTEM = """You read the pages of one website and say what it sells, so its founder can confirm it.
+Describe only what the pages say. Never invent a product, a feature or a buyer.
+List every distinct thing the site appears to sell (a platform and its add-ons, separate products, a services arm),
+at most five; a company with one product has exactly one offering. `primary` is the one the site emphasises most.
+`confidence` is how sure you are that the primary offering is the one product to find customers for: high when the
+site sells one thing, low when it sells several comparable things or the pages talk about a mission, not a product.
+When the site is a portfolio, an agency, a personal page, or too vague to name a product, say so in `ambiguity`,
+leave `offerings` empty and set `confidence` low. Plain words, no marketing language."""
+
+
+def understand(source_text: str, ask) -> dict:
+    """One small model call; `ask` is pipeline.ask, passed in so this module imports nothing from the app."""
+    u = ask(Understanding, UNDERSTAND_SYSTEM, source_text).model_dump()
+    u["offerings"] = u["offerings"][:5]
+    u["primary"] = min(max(u["primary"], 0), max(len(u["offerings"]) - 1, 0))
+    u["confidence"] = min(max(u["confidence"], 0.0), 1.0)
+    return u

@@ -338,3 +338,12 @@ a.r:hover, button.r:hover { background: rgba(255, 255, 255, 0.55); }
 .note .label { margin: 0 0 var(--space-2); }
 .note-text { margin: 0; font-size: 1.0625rem; line-height: 1.55; color: var(--color-ink); text-wrap: pretty; }
 .note-foot { margin: var(--space-3) 0 0; color: var(--color-muted); font-size: 0.875rem; }
+
+/* The confirm step: the offerings as ruled rows with a radio, in the page's own row pattern. */
+.btn .glyph { color: inherit; }
+.cf-opts, .cf-why { max-width: 34rem; margin: var(--space-8) auto 0; text-align: left; }
+.cf-why { text-align: center; }
+.cf-opts .r { grid-template-columns: 1.5rem minmax(0, 1fr); cursor: pointer; }
+.cf-opts .r-n, .cf-opts .r-t { grid-column: auto; }
+.cf-opts input { accent-color: var(--color-ink); width: 1rem; height: 1rem; margin: 0; }
+#cf-say[hidden] { display: none; }
