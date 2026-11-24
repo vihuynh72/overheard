@@ -387,7 +387,7 @@ function stoppedNote(status) {
   const site = ((status.log || []).map(l => /reading\s+(\S+)/.exec(l)).find(Boolean) || [])[1] || "";
   const host = site ? hostOf(/^https?:/.test(site) ? site : "https://" + site) || site : "";
   return `<aside class="note" role="status"><p class="label bare">${decline ? "Not a fit" : "Last search stopped"}${host ? ` · ${esc(host)}` : ""}</p>
-    <p class="note-text">${esc(decline ? err.replace(/^Overheard is not a fit for this product:\s*/i, "") : err)}</p>
+    <p class="note-text">${esc(decline ? err.replace(/^(?:Overheard|Earshot) is not a fit for this product:\s*/i, "") : err)}</p>
     <p class="note-foot">Your earlier results are below. <button type="button" class="linkish" data-restart>Try another website</button></p></aside>`;
 }
 function failedView() {
@@ -395,7 +395,7 @@ function failedView() {
   const decline = /not a fit/i.test(err);
   return `<header class="hero" role="alert"><div class="wrap"><p class="label">${decline ? "Not a fit" : "Stopped"}</p>
     <h1 class="display">${decline ? "Wrong tool for <em>this product</em>" : "The run <em>stopped</em>"}</h1>
-    <p class="hero-desc">${esc(decline ? err.replace(/^Overheard is not a fit for this product:\s*/i, "") : err)}</p>
+    <p class="hero-desc">${esc(decline ? err.replace(/^(?:Overheard|Earshot) is not a fit for this product:\s*/i, "") : err)}</p>
     <div class="hero-act"><button type="button" class="btn" data-restart>${decline ? "Try another website" : "Try again"}</button></div></div></header>`;
 }
 
