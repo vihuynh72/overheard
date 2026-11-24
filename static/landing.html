@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f9f6f0">
 <title>Earshot · outbound that starts from what people wrote</title>
 <meta name="description" content="Paste your website. Earshot names your customer, finds the people who described that exact problem in public, shows you what they wrote, and drafts a message you approve.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,21 +40,6 @@
       </div>
     </div>
 
-    <div class="field" aria-hidden="true">
-      <div class="track">
-        <span>Webhook retries fire twice after a timeout</span><span>Docs for the self-hosted install are out of date</span><span class="said" data-i="0">No invoice is generated for billing periods where the charge is $0</span><span>Dark mode toggle resets on reload</span><span>Support arm64 images</span>
-      </div>
-      <div class="track">
-        <span>Migration fails on Postgres 16</span><span>Add CSV export for customers list</span><span>Rate limiter ignores the per-key setting</span><span class="said" data-i="1">Coupon and discount amounts don't carry over to the Stripe invoice line items</span><span>Typo in the README</span>
-      </div>
-      <div class="track">
-        <span>Helm chart missing resource limits</span><span class="said" data-i="2">Need quota-based billing with a webhook when the quota is reached</span><span>Login page flashes before redirect</span><span>Timezone wrong on usage graphs</span><span>Bump the SDK version</span>
-      </div>
-      <div class="track">
-        <span>CLI prints a stack trace on bad config</span><span>Search does not match partial words</span><span>Allow SSO with Okta</span><span>Pagination skips the last page</span><span>Clarify the license for plugins</span>
-      </div>
-    </div>
-
     <aside class="heard" aria-labelledby="heard-title">
       <h2 id="heard-title" class="label">Heard on flexprice.io, today</h2>
       <ol class="heard-list">
@@ -61,7 +47,7 @@
         <li>Coupon and discount amounts don't carry over to the Stripe invoice line items</li>
         <li>Need quota-based billing with a webhook when the quota is reached</li>
       </ol>
-      <p class="heard-note">Three phrasings it learned from real public posts. The rest of this field is illustration.</p>
+      <p class="heard-note">Three phrasings it learned from real public posts.</p>
     </aside>
   </section>
 
@@ -117,28 +103,14 @@
   <section class="line" id="line" aria-labelledby="line-title">
     <h2 id="line-title">Seven agents, one line. Each hands the next something it can check.</h2>
     <ol class="agents">
-      <li><span class="creature" data-seed="planner"></span><h3>Planner</h3><p>Reads your site. Hands on a customer, the pains they have, and where they talk.</p></li>
-      <li><span class="creature" data-seed="scout"></span><h3>Scout</h3><p>Listens there. Hands on posts that describe a pain, each with its link.</p></li>
-      <li><span class="creature" data-seed="qualifier"></span><h3>Qualifier</h3><p>Weighs each post. Hands on the few people worth writing to, and why.</p></li>
-      <li><span class="creature" data-seed="enricher"></span><h3>Enricher</h3><p>Looks for a way to reach them. Hands on a checked address, or says there is none.</p></li>
-      <li><span class="creature" data-seed="writer"></span><h3>Writer</h3><p>Drafts from the person's own words. Hands on a message that quotes what they said.</p></li>
-      <li><span class="creature" data-seed="reviewer"></span><h3>Reviewer</h3><p>A second model checks every claim against the evidence. Hands on a clean draft, or holds it.</p></li>
-      <li><span class="creature" data-seed="sender"></span><h3>Sender</h3><p>Releases only what you approved, and only when every gate passes.</p></li>
+      <li><h3>Planner</h3><p>Reads your site. Hands on a customer, the pains they have, and where they talk.</p></li>
+      <li><h3>Scout</h3><p>Listens there. Hands on posts that describe a pain, each with its link.</p></li>
+      <li><h3>Qualifier</h3><p>Weighs each post. Hands on the few people worth writing to, and why.</p></li>
+      <li><h3>Enricher</h3><p>Looks for a way to reach them. Hands on a checked address, or says there is none.</p></li>
+      <li><h3>Writer</h3><p>Drafts from the person's own words. Hands on a message that quotes what they said.</p></li>
+      <li><h3>Reviewer</h3><p>A second model checks every claim against the evidence. Hands on a clean draft, or holds it.</p></li>
+      <li><h3>Sender</h3><p>Releases only what you approved, and only when every gate passes.</p></li>
     </ol>
-  </section>
-
-  <section class="ask" aria-labelledby="ask-title">
-    <div class="ask-copy">
-      <h2 id="ask-title">You give a goal, not labour.</h2>
-      <p>The machine asks one question at a time, and only the ones it cannot settle itself. Every question shows the evidence beside it.</p>
-      <p>Autonomy is earned. The agents act alone only where their past judgments matched yours and their own checks are clean. One release you would have stopped ends autopilot.</p>
-    </div>
-    <figure class="question" aria-label="A question as Earshot asks it">
-      <p class="label">Needs you <span class="mono">1 of 6</span></p>
-      <p class="q">Write to this person?</p>
-      <p class="q-said"><span class="label">They wrote</span> [BUG]: Invoice not being generated when cost is 0 <span class="mono">getlago/lago</span></p>
-      <div class="q-actions" aria-hidden="true"><span class="q-yes">Yes, send it</span><span>No</span><span>Later</span></div>
-    </figure>
   </section>
 
   <section class="limits" id="limits" aria-labelledby="limits-title">

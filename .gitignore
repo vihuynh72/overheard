@@ -9,3 +9,5 @@ __pycache__/
 data/
 graphify-out/
 .band/
+demo/work/
+demo/node_modules/

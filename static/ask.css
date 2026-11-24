@@ -1,39 +1,14 @@
 /* Earshot Ask: the docked surface where the machine asks the founder one question at a time. Colours and type from tokens.css. */
 
 /* Ask-only values not in tokens.css */
-:root {
-  --ask-z: 50;                      /* above the page and its sticky bar, below the pilot cursor so the machine can point over it */
-  --ask-width: 38rem;
-  --ask-gutter: var(--space-4);
-  --ask-dock-clearance: 3.25rem;    /* room for the pilot's on/off pill in the bottom-right corner on narrow screens */
-  --ask-rise: 14px;
-  --ask-dur: 240ms;
-  --ask-lift: 0 10px 28px var(--color-shadow);
-  --ask-hit: 3rem;
-  --ask-page-clearance: 20rem;      /* lets the last of the page scroll clear of the open card */
-}
+:root { --ask-hit: 2.75rem; --ask-dur: 200ms; }
 
 .ask, .ask * { box-sizing: border-box; }
-.ask {
-  position: fixed; left: 0; right: 0; bottom: var(--ask-gutter); z-index: var(--ask-z);
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
-  padding: 0 var(--ask-gutter);
-  pointer-events: none;
-  font: 400 var(--text-base)/1.5 var(--font-body);
-  color: var(--color-ink);
-}
-.ask > * { pointer-events: auto; }
-body:has(.ask[data-state="open"]) { padding-bottom: var(--ask-page-clearance); }
-
-/* The card */
+/* In the flow of home: beside the answer on wide screens, after it on narrow ones. No box: a rule above, then the words. */
+.ask { display: flex; flex-direction: column; gap: var(--space-2); font: 400 var(--text-base)/1.5 var(--font-body); color: var(--color-ink); }
 .ask-card {
-  width: min(100%, var(--ask-width));
-  max-height: min(70vh, 34rem); overflow-y: auto; overscroll-behavior: contain;
-  padding: var(--space-6);
-  border: 1px solid var(--color-rule); border-radius: var(--radius-md);
-  background: var(--color-paper-2);
-  box-shadow: var(--ask-lift);
-  opacity: 0; transform: translateY(var(--ask-rise));
+  padding: var(--space-4) 0 0; border-top: 1px solid var(--color-ink);
+  opacity: 0; transform: translateX(12px);
   transition: opacity var(--ask-dur) var(--ease-out), transform var(--ask-dur) var(--ease-out);
 }
 .ask-card.is-in { opacity: 1; transform: none; }
@@ -55,7 +30,7 @@ body:has(.ask[data-state="open"]) { padding-bottom: var(--ask-page-clearance); }
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2);
   margin: var(--space-3) 0 0; font-size: var(--text-sm); overflow-wrap: anywhere;
 }
-.ask-evidence { padding-left: var(--space-3); border-left: 1px solid var(--color-gold); }
+.ask-evidence { color: var(--color-muted); }
 .ask-label { flex: 0 0 auto; font: 500 var(--text-xs)/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-muted); }
 .ask-title { font-weight: 500; }
 .ask-where { flex-basis: 100%; color: var(--color-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
@@ -79,7 +54,7 @@ body:has(.ask[data-state="open"]) { padding-bottom: var(--ask-page-clearance); }
 .ask-yes:hover { background: var(--color-accent-strong); border-color: var(--color-accent-strong); }
 .ask-quiet { border-color: transparent; color: var(--color-muted); }
 .ask-quiet:hover { color: var(--color-ink); border-color: var(--color-rule); background: transparent; }
-.ask-btn:focus-visible, .ask-chip:focus-visible, .ask-link:focus-visible, .ask-sound:focus-visible, .ask-input:focus-visible {
+.ask-btn:focus-visible, .ask-chip:focus-visible, .ask-link:focus-visible, .ask-input:focus-visible {
   outline: 2px solid var(--color-focus); outline-offset: 2px;
 }
 .ask-card[aria-busy="true"] .ask-btn, .ask-card[aria-busy="true"] .ask-chip { opacity: 0.55; cursor: progress; }
@@ -119,8 +94,8 @@ body:has(.ask[data-state="open"]) { padding-bottom: var(--ask-page-clearance); }
 .ask[data-state="open"] .ask-idle, .ask[data-state="open"] .ask-resume, .ask-idle[hidden], .ask-resume[hidden] { display: none; }
 .ask-resume {
   min-height: 2rem; padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-gold); border-radius: var(--radius-pill);
-  background: var(--color-paper-2); color: var(--color-ink);
+  border: 1px solid var(--color-rule); border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-ink);
   font: 500 var(--text-xs)/1.2 var(--font-body); cursor: pointer;
   transition: background-color var(--dur-short) var(--ease-out);
 }
@@ -128,20 +103,8 @@ body:has(.ask[data-state="open"]) { padding-bottom: var(--ask-page-clearance); }
 .ask-resume:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .ask[data-state="idle"] .ask-bar { opacity: 0.6; transition: opacity var(--dur-short) var(--ease-out); }
 .ask[data-state="idle"] .ask-bar:hover, .ask[data-state="idle"] .ask-bar:focus-within { opacity: 1; }
-.ask-sound {
-  min-height: 2rem; padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-rule); border-radius: var(--radius-pill);
-  background: var(--color-paper-2); color: var(--color-muted);
-  font: 500 var(--text-xs)/1.2 var(--font-body); cursor: pointer;
-  transition: color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
-}
-.ask-sound:hover { color: var(--color-ink); border-color: var(--color-control); }
-.ask-sound[aria-pressed="true"] { color: var(--color-ink); border-color: var(--color-gold); }
-
 @media (pointer: coarse) { .ask-kbd { display: none; } }
 @media (max-width: 44rem) {
-  .ask { bottom: calc(var(--ask-gutter) + var(--ask-dock-clearance)); }
-  .ask-card { padding: var(--space-4); }
   .ask-q { font-size: var(--text-xl); }
   .ask-answers .ask-btn { flex: 1 1 auto; padding: 0 var(--space-4); }
   .ask-card[data-step="why"] :is(.ask-why, .ask-evidence, .ask-subject) { display: none; }  /* the reason form needs the room */

@@ -1,14 +1,11 @@
 // Earshot Ask: the one place the machine asks the founder something. Silent when nothing needs a person;
-// otherwise one question at a time, answerable in a word. Speech is output first; listening is for yes, no or later only.
+// otherwise one question at a time, answerable in a word.
 // Every string from the server is untrusted: it reaches the page through textContent only.
 window.EarshotAsk = (() => {
   "use strict";
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const STORE_KEY = "earshot.ask.sound";
   const LOW_CREDITS = 15;   // mirrors billing.LOW_WATER on the server
   const BRIEF_MS = 6000;    // how long a briefing stays before it fades
   const STALE_DAYS = 180;   // a newest signal older than this offers "Too old" as a reason
-  const WORDS = {yes: "yes", yeah: "yes", yep: "yes", "send it": "yes", no: "no", nope: "no", skip: "no", later: "later"};
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
   const el = (tag, cls, text) => {
@@ -30,12 +27,10 @@ window.EarshotAsk = (() => {
     s = m ? m[0] : s;
     return s.length > 180 ? s.slice(0, 177).replace(/\s+\S*$/, "") + "..." : s;
   };
-  const stored = () => { try { return localStorage.getItem(STORE_KEY) === "on"; } catch { return false; } };
-  const store = v => { try { localStorage.setItem(STORE_KEY, v ? "on" : "off"); } catch { /* private mode: lasts this page */ } };
   const dur = () => reduced.matches ? 0 : 240;
 
   // --- the surface, built once ---
-  let note, firstLead = true, root, card, kicker, progress, toggle, question, why, evidence, subject, answers, yesB, noB, laterB,
+  let note, firstLead = true, root, card, kicker, progress, question, why, evidence, subject, answers, yesB, noB, laterB,
     follow, chips, form, input, skipB, fixB, okB, errorP, idle, resume;
   function build() {
     root = el("section", "ask");
@@ -44,10 +39,6 @@ window.EarshotAsk = (() => {
     const top = el("div", "ask-top");
     kicker = el("p", "ask-kicker");
     progress = el("p", "ask-progress");
-    toggle = el("button", "ask-sound");
-    toggle.type = "button";
-    toggle.title = "Speak each question, and listen for yes, no or later";
-    toggle.addEventListener("click", () => setSound(!soundOn));
     top.append(kicker, progress);
     question = el("p", "ask-q");
     question.id = "ask-q";
@@ -103,23 +94,21 @@ window.EarshotAsk = (() => {
       else show(next());
     });
     const bar = el("div", "ask-bar");
-    bar.append(idle, resume, toggle);
+    bar.append(idle, resume);
     root.append(card, bar);
     document.body.appendChild(root);
 
     document.addEventListener("keydown", onKey);
-    setSound(soundOn, true);
     card.hidden = true;
   }
 
   // --- state ---
   let data = null, actions = null;
   const asked = new Set();      // keys answered or shown once: never asked again this session
-  const spoken = new Set();
   let later = [];               // keys deferred with Later, oldest first: they go to the back of the queue
   let notices = [];             // one-shot items waiting: briefings and stops
   let current = null, step = "ask", busy = false, batchDone = 0, wasRunning = null, lastError = "";
-  let swapToken = 0, briefTimer = 0, soundOn = stored(), audio = null, rec = null, micBlocked = false;
+  let swapToken = 0, briefTimer = 0;
 
   const leadOf = login => (data && data.leads || []).find(l => l.login === login);
   const pendingLeads = () => (data.leads || []).filter(l => l.draft_status === "pending" && !asked.has("lead:" + l.login));
@@ -239,24 +228,22 @@ window.EarshotAsk = (() => {
   function show(item) {
     const token = ++swapToken, hadFocus = root.contains(document.activeElement);
     clearTimeout(briefTimer);
-    stopListening();
     current = item;
     step = "ask";
     const wasIn = card.classList.contains("is-in");
     card.classList.remove("is-in");
     const fill = () => {
       if (token !== swapToken) return;
-      if (!item) { card.hidden = true; root.dataset.state = "idle"; showResume(); if (hadFocus) toggle.focus({preventScroll: true}); return; }
+      if (!item) { card.hidden = true; root.dataset.state = "idle"; showResume(); if (hadFocus) resume.focus({preventScroll: true}); return; }
       render(item);
       card.hidden = false;
       root.dataset.state = "open";
       void card.offsetWidth;                      // commit the start state so the arrival animates
       card.classList.add("is-in");
-      if (hadFocus) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : toggle).focus({preventScroll: true});
+      if (hadFocus) (item.yesno ? yesB : item.fix ? fixB : item.kind === "stop" ? okB : card).focus({preventScroll: true});
       if (item.kind === "lead" && actions.open) { try { actions.open(item.login); } catch { /* the card still works without the page behind it */ } }
       if (item.kind === "brief") { asked.add(item.key); briefTimer = setTimeout(() => { if (current === item) finish(); }, BRIEF_MS); }
       if (item.kind === "stop") asked.add(item.key);
-      say(item);
     };
     wasIn ? setTimeout(fill, dur()) : fill();
   }
@@ -303,7 +290,6 @@ window.EarshotAsk = (() => {
     follow.hidden = s !== "why";
     answers.hidden = s === "why";
     card.dataset.step = s;
-    s === "why" ? stopListening() : listenSoon();
   }
   function setError(msg) { errorP.textContent = msg; errorP.hidden = !msg; }
   function setBusy(b) {
@@ -325,7 +311,6 @@ window.EarshotAsk = (() => {
     } catch (e) {
       setBusy(false);
       setError((e && e.message) || "That did not go through. Try again.");
-      listenSoon();
     }
   }
   function answer(word) {
@@ -373,56 +358,6 @@ window.EarshotAsk = (() => {
       answer({y: "yes", n: "no", l: "later"}[k]);
     }
   }
-
-  // --- sound: spoken once per question; listening only while a yes/no question is open ---
-  function setSound(on, quiet) {
-    soundOn = on;
-    if (!quiet) store(on);
-    toggle.setAttribute("aria-pressed", String(on));
-    toggle.textContent = on ? "Sound on" : "Sound off";
-    if (!on) { stopAudio(); stopListening(); }
-    else if (current && !quiet) say(current);
-  }
-  async function say(item) {
-    if (!soundOn || !item || spoken.has(item.key)) return listenSoon();
-    spoken.add(item.key);
-    stopAudio();
-    stopListening();
-    try {
-      const r = await fetch("/api/speak", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({text: item.q})});
-      if (!r.ok) throw new Error(r.status);
-      const blob = await r.blob();
-      if (current !== item || !soundOn) return;
-      const url = URL.createObjectURL(blob);
-      const a = audio = new Audio(url);
-      await new Promise(done => { a.onended = a.onerror = a.onpause = done; a.play().catch(done); });
-      URL.revokeObjectURL(url);
-      if (audio === a) audio = null;
-    } catch { /* silent by design: the words are already on screen */ }
-    listenSoon();
-  }
-  function stopAudio() { if (audio) { const a = audio; audio = null; a.pause(); } }
-
-  function canListen() { return SR && soundOn && !micBlocked && !audio && current && current.yesno && step === "ask" && !busy; }
-  function listenSoon() { setTimeout(listen, 250); }
-  function listen() {
-    if (rec || !canListen()) return;
-    const item = current;
-    rec = new SR();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 3;
-    rec.onresult = e => {
-      for (const res of e.results) for (const alt of res) {
-        const w = WORDS[alt.transcript.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim()];
-        if (w && current === item) { stopListening(); return answer(w); }
-      }
-    };
-    rec.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) micBlocked = true; };
-    rec.onend = () => { rec = null; if (current === item) listenSoon(); };
-    try { rec.start(); } catch { rec = null; }
-  }
-  function stopListening() { if (rec) { const r = rec; rec = null; r.onend = null; try { r.abort(); } catch { /* already stopped */ } } }
 
   return {update};
 })();
