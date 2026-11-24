@@ -509,6 +509,10 @@ def run(description: str, product_repo: str = "", review=None, sources: list[str
             for s in signals:
                 if s.get("kind") == "web":
                     store.upsert("Repo", "name", dict(name=s["repo"], kind="web"))
+                elif s["repo"] not in icp["repos"]:
+                    # An issue found by searching all of GitHub sits on a repository nobody was watching. Without
+                    # its Repo node the ABOUT link fails and the person would be stored with no evidence at all.
+                    store.upsert("Repo", "name", dict(name=s["repo"], kind="other"))
                 store.upsert("Signal", "id", dict(id=s["id"], url=s["url"], title=s["title"], excerpt=s["excerpt"],
                                                   created=s["created"], pain=s["pain"], match=s["match"]))
                 store.link("Person", "login", lead["login"], "RAISED", "Signal", "id", s["id"])
