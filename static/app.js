@@ -11,7 +11,8 @@ const MOVED = {floor: "home", profile: "home", map: "leads", pipeline: "leads", 
 const EMAIL = {valid: "verified", accept_all: "domain accepts all mail", invalid: "failed verification", webmail: "personal webmail", disposable: "disposable address", unknown: "unverified", pending: "verifying"};
 
 const ui = {data: null, json: "", example: false, restart: false, selected: null, tier: "All", rejecting: false, desc: "", repo: "", target: "", error: "", detailKey: "", shown: "", open: {},
-  head: "", ticked: new Set(), ledgerAll: false, entered: new Set()};
+  head: "", ticked: new Set(), ledgerAll: false, entered: new Set(), moving: null, prof: 0, layout: "List"};
+try { if (localStorage.getItem("earshot.layout") === "Board") ui.layout = "Board"; } catch (e) { /* storage blocked: list it is */ }
 
 async function api(path, body) {
   const r = await fetch(path, body ? {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)} : {});
@@ -167,7 +168,31 @@ function homeCustomer(d, example) {
     (pains.length ? sec(example ? "s-pains" : "h-pains", secHead("What they struggle with", `${["One", "Two", "Three"][pains.length - 1]} <em>${pains.length === 1 ? "pain" : "pains"}</em>`) + `<ul class="cards">${painCards}</ul>`, "pains") : "") +
     (wordRows ? sec(example ? "s-words" : "h-words", secHead("In their own words", "What they <em>wrote</em>") + `<ul class="rows">${wordRows}</ul>`) : "") +
     (top.length ? sec(example ? "s-people" : "h-people", secHead("People", "Who <em>said it</em>") + `<ul class="cards">${top.map(personCard).join("")}</ul>` +
-      (example ? "" : `<p class="center"><a class="pill" href="#leads">See all ${leads.length} <span aria-hidden="true">⌄</span></a></p>`)) : "");
+      (example ? "" : `<p class="center"><a class="pill" href="#leads">See all ${leads.length} <span aria-hidden="true">⌄</span></a></p>`)) : "") +
+    (example ? "" : fullProfile(i, d.expansions || {}));
+}
+// Everything else the Planner inferred, closed by default: one row per question, opened in place.
+function fullProfile(i, said) {
+  const list = xs => `<ul class="st-lines">${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  const exp = (i.expansion || []).filter(x => x.segment).map(x => { const a = said[x.segment], seg = esc(x.segment);
+    const pills = ["accept", "dismiss"].filter(k => k !== a).map(k => `<button type="button" class="pill sm" data-expand="${k}" data-segment="${seg}">${a ? (k === "accept" ? "Add instead" : "Dismiss instead") : k === "accept" ? "Add" : "Dismiss"}</button>`).join("");
+    return `<li class="exp"><span><b>${seg}</b> ${esc(x.reasoning || "")}</span><span class="exp-act">${a ? `<span class="meta">${a === "accept" ? "Added" : "Dismissed"}</span>` : ""}${pills}</span></li>`; });
+  const comp = (i.competitors || []).filter(c => c.name).map(c => `<li><b>${esc(c.name)}</b> <span class="meta">${esc(c.category || "")}</span><br>${esc(c.positioning || "")}${c.github_repo ? ` · ${ext("https://github.com/" + c.github_repo, c.github_repo + " ↗")}` : ""}</li>`);
+  const rows = [
+    ["Industries", vals(i.industries), list],
+    ["Company size", vals(i.company_size), list],
+    ["Who buys", vals(i.personas), list],
+    ["What triggers a search", vals(i.triggers), list],
+    ["Not a fit when", vals(i.negative_signals), list],
+    ["Also worth a look", exp, xs => `<ul class="st-lines">${xs.join("")}</ul>`],
+    ["Who else sells this", comp, xs => `<ul class="st-lines">${xs.join("")}</ul>`],
+  ].filter(r => r[1].length);
+  if (!rows.length) return "";
+  const lis = rows.map(([t, xs, f], k) => { const n = k + 1, open = ui.prof === n;
+    return `<li class="st${open ? " is-open" : ""}"><button type="button" class="r st-btn" data-prof="${n}" aria-expanded="${open}" aria-controls="pf-more-${n}">
+      <span class="r-k num">0${n}</span><span class="r-t">${t}</span><span class="r-n">${xs.length}<span class="chev" aria-hidden="true">⌄</span></span></button>
+      <div class="st-more" id="pf-more-${n}"${open ? "" : " inert"}><div>${f(xs)}</div></div></li>`; }).join("");
+  return sec("h-prof", secHead("The full profile", "Who to <em>look for</em>") + `<ul class="rows story">${lis}</ul>`, "profile");
 }
 
 // Arrival: one promise, one field, three steps.
@@ -221,7 +246,8 @@ function runView() {
       const note = state === "done" ? s.result?.(log) : state === "now" ? strip(log.at(-1) || "Starting.") : "";
       return `<li><div class="r" data-state="${state}"${state === "now" ? ` aria-current="step"` : ""}><span class="r-k">${state === "done" ? TICK : `0${i + 1}`}</span>
         <span class="r-t">${s.name}<span class="visually-hidden">${state === "done" ? ", done" : state === "now" ? ", in progress" : ""}</span></span><span class="r-n">${esc(note || "")}</span></div></li>`;
-    }).join("")}</ul></div></section>`;
+    }).join("")}</ul>
+    <details class="nosite live" data-fold="live" ${ui.open.live ? "open" : ""}><summary>Live</summary><ul class="st-lines">${log.map(l => `<li>${esc(PLAIN(l))}</li>`).join("")}</ul></details></div></section>`;
 }
 function failedView() {
   const err = String(ui.data.status.error || "").replace(/^[A-Za-z]+Error:\s*/, "");
@@ -276,18 +302,38 @@ const SAMPLE = {status: {running: false, log: ["Planner: reading https://flexpri
 const HEADS = {leads: ["People", "People who <em>described it</em>"], activity: ["Activity", "The same story, <em>in full</em>"]};
 function peopleView() {
   const {leads, status} = ui.data;
-  const found = leads.length, written = leads.filter(l => ["Contacted", "Replied", "Meeting Booked"].includes(l.stage)).length;
-  const replied = leads.filter(l => ["Replied", "Meeting Booked"].includes(l.stage)).length;
-  const head = `<p class="sub num" id="funnel" style="margin:0 0 var(--space-8)">${found} kept of ${heardFrom(ui.data)} found · ${written} written to · ${replied} replied</p>`;
+  const found = leads.length, stages = ui.data.stages || [];
+  const n = s => leads.filter(l => l.stage === s).length, t = k => leads.filter(l => l.tier === k).length;
+  const head = `<p class="sub num" id="funnel" style="margin:0 0 var(--space-8)">${stages.map(s => `${n(s)} ${STAGE_SAYS[s] || s.toLowerCase()}`).join(" · ")}
+    <small class="tiers" title="By score: the spec's Tier A, B and C">By score: ${["A", "B", "C"].map(k => `${TIER[k]} ${t(k)}`).join(" · ")}</small></p>`;
   if (!found) return head + `<p class="muted">${status.running ? "Running." : "No one yet."}</p>`;
   if (lead()) return head + `<button type="button" class="pill back" data-back><span aria-hidden="true">←</span> Everyone</button><div class="person" id="detail"></div>`;
   const filter = found > 12;
   const shown = leads.filter(l => !filter || ui.tier === "All" || l.tier === ui.tier);
-  return head + (filter ? `<div class="seg" role="group" aria-label="Filter by match">${["All", "A", "B", "C"].map(t => `<button type="button" data-tier-filter="${t}" aria-pressed="${ui.tier === t}">${TIER[t] || t}</button>`).join("")}</div>` : "") +
+  const layout = `<div class="seg" role="group" aria-label="Show as">${["List", "Board"].map(k => `<button type="button" data-layout="${k}" aria-pressed="${ui.layout === k}">${k}</button>`).join("")}</div>`;
+  const bar = `<div class="peo-bar">${filter ? `<div class="seg" role="group" aria-label="Filter by match">${["All", "A", "B", "C"].map(t => `<button type="button" data-tier-filter="${t}" aria-pressed="${ui.tier === t}">${TIER[t] || t}</button>`).join("")}</div>` : "<span></span>"}${layout}</div>`;
+  if (ui.layout === "Board") return head + bar + board(shown, stages);
+  return head + bar +
     `<ul class="rows${enter("leads")}">${shown.map(l => `<li><button type="button" class="r" data-open="${esc(l.login)}">
       <span class="r-k num">Score ${esc(l.score)}</span>
       <span class="r-t">${esc(whoOf(l))}${l.company ? ` <i>${esc(l.company)}</i>` : ""}<small>${esc(l.reason)}</small></span>
       <span class="r-n">${esc(l.stage)}</span></button></li>`).join("") || `<li class="r muted">No one here.</li>`}</ul>`;
+}
+const STAGE_SAYS = {Matched: "matched", Contacted: "contacted", Replied: "replied", "Meeting Booked": "meetings", "Closed/Lost": "closed"};
+// The pipeline as five columns; the Move menu is the path that always works, dragging is a shortcut.
+function board(shown, stages) {
+  const card = l => { const open = ui.moving === l.login;
+    return `<li class="bcard" draggable="true" data-drag="${esc(l.login)}"><button type="button" class="bc-open" data-open="${esc(l.login)}">${avatar(l)}
+      <span class="bc-name">${esc(whoOf(l))}<small class="meta">${esc([l.company, `Score ${l.score}`].filter(Boolean).join(" · "))}</small></span></button>
+      <p class="bc-foot"><span>moved by ${esc(who(l.stage_actor) || "Earshot")}</span><button type="button" class="pill sm" data-move="${esc(l.login)}" aria-expanded="${open}" aria-controls="mv-${esc(l.login)}">Move</button></p>
+      <div class="mv-menu" id="mv-${esc(l.login)}" role="group" aria-label="Move ${esc(whoOf(l))} to"${open ? "" : " hidden"}>${stages.map(s => `<button type="button" data-stage-to="${esc(s)}" data-login="${esc(l.login)}"${s === l.stage ? ` aria-current="true" disabled` : ""}>${esc(s)}</button>`).join("")}</div></li>`; };
+  return `<div class="board${enter("board")}">${stages.map(s => { const ls = shown.filter(l => l.stage === s);
+    return `<section class="col" data-drop="${esc(s)}" aria-label="${esc(s)}"><p class="label bare">${esc(s)} <span class="num">${ls.length}</span></p><ul class="col-list">${ls.map(card).join("")}</ul></section>`; }).join("")}</div>`;
+}
+async function moveTo(login, stage) {
+  ui.moving = null;
+  try { await api(`/api/leads/${encodeURIComponent(login)}/stage`, {stage}); } catch (err) { console.error(err); }
+  refresh(true);
 }
 
 function detail() {
@@ -301,10 +347,9 @@ function detail() {
   const done = l.draft_status !== "pending";
   el.innerHTML = `${avatar(l, true)}<h2 class="display">${esc(whoOf(l))}</h2>
     <p class="meta">${esc([l.company, `Score ${l.score}`, TIER[l.tier], l.stage].filter(Boolean).join(" · "))}</p>
-    <p class="facts"><a href="${safeUrl(l.url)}" target="_blank" rel="noopener">${l.url.startsWith("https://github.com/") ? "GitHub" : "Their post"} ↗</a>
-      <span>${l.email ? esc(l.email) + " · " + esc(EMAIL[l.email_status] || "unverified") : "No email"}</span>
-      ${safeUrl(l.linkedin_url) !== "#" ? `<a href="${safeUrl(l.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ""}</p>
+    <p class="facts"><a href="${safeUrl(l.url)}" target="_blank" rel="noopener">${l.url.startsWith("https://github.com/") ? "GitHub" : "Their post"} ↗</a></p>
     <p class="reason">${esc(l.reason)}</p>
+    ${personFacts(l)}
     <section class="block">${secHead("What they wrote", "In their <em>words</em>")}<ul class="rows">
       ${l.signals.map(s => `<li><a class="r" href="${safeUrl(s.url)}" target="_blank" rel="noopener"><span class="r-k">${esc(when(s.created))}</span>
         <span class="r-t"><i>${esc(s.repo)}</i> ${esc(noTag(s.title))}<small>${esc(s.excerpt)}</small></span><span class="r-n">${AR}</span></a></li>`).join("")}</ul></section>
@@ -316,8 +361,29 @@ function detail() {
            <div class="actions"><button type="button" class="btn danger" data-act="reject">Reject</button><button type="button" class="btn quiet" data-act="cancel">Keep</button></div>`
         : `<div class="actions"><button type="button" class="btn" data-act="approve">Approve</button><button type="button" class="btn quiet" data-act="start-reject">Reject</button></div>
            <p class="hint" style="text-align:center;margin-top:var(--space-3)">Goes to a test inbox, never to them.</p>`}</div>
-    </section>`}`;
+    </section>`}${personHistory(l)}`;
   if (ui.rejecting) $("why")?.focus();
+}
+// Contact, fit and history for one person: the spec's enrichment indicators and audit trail, in ruled rows.
+const fact = (k, v, n) => `<li><div class="r"><span class="r-k">${k}</span><span class="r-t">${v}</span><span class="r-n">${n || ""}</span></div></li>`;
+const NOT = `<span class="muted">Not found</span>`;
+const ext = (u, t) => `<a href="${safeUrl(u)}" target="_blank" rel="noopener">${esc(t)}</a>`;
+function personFacts(l) {
+  const mark = !l.email ? "" : l.email_status === "valid" ? "Verified by Hunter" : "Not verified";
+  const site = l.domain ? ext("https://" + l.domain, l.domain) : "";
+  const role = l.position || (l.role && l.role !== "unknown" ? cap(l.role) : "");
+  return `<section class="block">${secHead("Contact", "How to <em>reach them</em>")}<ul class="rows facts-rows">
+      ${fact("Email", l.email ? esc(l.email) : NOT, mark)}
+      ${fact("LinkedIn", safeUrl(l.linkedin_url) !== "#" ? ext(l.linkedin_url, "Profile ↗") : NOT)}
+      ${fact("Company", l.company || site ? [esc(l.company), site].filter(Boolean).join(" · ") : NOT)}
+      ${fact("Role", role ? esc(role) : NOT)}
+      ${fact("Location", l.location ? esc(l.location) : NOT)}</ul></section>
+    <section class="block">${secHead("Fit", `<span class="num">${esc(l.score)}</span> <em>of 100</em>`)}<ul class="rows facts-rows">
+      ${fact("Score", `<span class="bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, +l.score || 0))}%"></i></span>`, `${esc(TIER[l.tier] || "Unscored")}${l.tier ? ` (${esc(l.tier)})` : ""}`)}</ul></section>`;
+}
+function personHistory(l) {
+  const hist = ui.data.events.filter(e => e.login === l.login).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  return `${hist.length ? `<section class="block">${secHead("History", "What <em>happened</em>")}<ul class="rows facts-rows">${hist.map(e => fact(esc(String(e.ts).slice(5, 10) + " " + String(e.ts).slice(11, 16)), `${esc(cap(e.action))}${e.detail && e.action !== "matched" ? ` <small>${esc(e.detail)}</small>` : ""}`, esc(who(e.actor)))).join("")}</ul></section>` : ""}`;
 }
 
 const LEVELS = ["shadow", "supervised", "autopilot"];  // mirrors app/trust.py
@@ -349,6 +415,7 @@ function activityView() {
   ];
   const run = status.running ? `<p class="sub" style="margin:0 0 var(--space-12)"><em>Running now.</em></p>` : !log.length ? `<p class="muted" style="margin:0 0 var(--space-12)">No run yet.</p>` : "";
   return run + steps.map((s, k) => block(`step-${k + 1}`, `0${k + 1} · ${NAMES[k]}`, s.t, `${s.n ? `<p class="sub" style="margin:0 0 var(--space-6)">${s.n}</p>` : ""}${logRows(k)}${extra[k]}`)).join("") +
+    (d.map ? block("graph", "The graph", "What the <em>map</em> shows", graphRows(d)) : "") +
     block("trust", "Trust", `${esc(LEVEL_SAYS[level] || cap(level))} · <em>${met} of ${gates.length}</em>`,
       `<ul class="rows">${gates.map(g => `<li><div class="r"><span class="r-k">${g.passed ? TICK : "–"}</span><span class="r-t">${esc(GATE_SAYS[g.key] || g.label)}<span class="visually-hidden">: ${g.passed ? "true" : "not yet"}</span></span><span class="r-n">${esc(gateVal(g))}</span></div></li>`).join("")}</ul>
        <p class="sub">Earshot may send on its own only when all five of these are true.</p>${target ? `<div class="actions"><button type="button" class="btn quiet" data-autonomy="${target}">${up === "autopilot" ? "Ask to send on its own" : up ? "Let it draft for you" : "Go back to approving each"}</button></div>` : ""}`) +
@@ -357,6 +424,24 @@ function activityView() {
        ${rows.length ? `<ul class="rows">${shown.map(e => `<li><div class="r ledger"><span class="r-k">${esc(String(e.ts).slice(11, 19))}</span><span class="r-t">${esc(SPEND[e.event] || e.event)}${e.ok ? "" : " (not recorded)"}${e.lead ? ` <i>${esc(e.lead)}</i>` : ""}</span><span class="r-n">${Number(e.credits).toFixed(1)}</span></div></li>`).join("")}</ul>
        ${rows.length > capN && !ui.ledgerAll ? `<p class="center"><button type="button" class="pill" data-ledger-all>See all ${rows.length} <span aria-hidden="true">⌄</span></button></p>` : ""}` : `<p class="muted">No spend yet.</p>`}
        ${billing.mode === "local" ? `<div class="actions"><button type="button" class="btn quiet" data-topup="20">Add 20 credits</button></div>` : ""}`);
+}
+// Findings computed from the map's edges; each is skipped when the data does not show it.
+function graphRows(d) {
+  const m = d.map, E = m.edges || [], ids = xs => new Set((xs || []).map(x => x.id));
+  const P = ids(m.people), C = ids(m.companies), R = new Map((m.repos || []).map(r => [r.id, r.kind])), pains = new Map((m.pains || []).map(p => [p.id, p.text]));
+  const count = (pick) => { const c = new Map(); E.forEach(e => { const k = pick(e); if (k) c.set(k, (c.get(k) || 0) + 1); }); return [...c].sort((a, b) => b[1] - a[1]); };
+  const topPain = count(e => pains.has(e.from) && P.has(e.to) ? e.from : null)[0];
+  const topRepo = count(e => P.has(e.from) && R.get(e.to) === "competitor" ? e.to : null)[0];
+  const shared = count(e => P.has(e.from) && C.has(e.to) ? e.to : null).filter(c => c[1] > 1);
+  const people = P.size, stages = d.stages || [], max = Math.max(1, d.leads.length);
+  const finds = [
+    topPain && topPain[1] > 1 ? fact("Most voiced", esc(headline(pains.get(topPain[0]))), plural(topPain[1], "person", "people")) : "",
+    topRepo ? fact("Competitor", `${topRepo[1]} of the ${people} were found complaining on <i>${esc(topRepo[0])}</i>`, "Competitor tracker") : "",
+    ...shared.map(([c, k]) => fact("Company", `${k} people at <i>${esc(c)}</i>`, "One account")),
+  ].join("");
+  return `<ul class="rows facts-rows">${fact("Counts", `<span class="num">${[plural(people, "person", "people"), plural(C.size, "company", "companies"), plural(R.size, "tracker", "trackers"), plural(pains.size, "pain", "pains"), plural(E.length, "link", "links")].join(" · ")}</span>`)}
+    ${finds}${fact("Conversion", `<span class="conv">${stages.map(s => { const k = d.leads.filter(l => l.stage === s).length;
+      return `<span class="conv-row"><span>${esc(s)}</span><span class="bar" aria-hidden="true"><i style="width:${k / max * 100}%"></i></span><span class="num">${k}</span></span>`; }).join("")}</span>`)}</ul>`;
 }
 // --- render loop -----------------------------------------------------------------
 
@@ -426,13 +511,27 @@ document.addEventListener("click", async e => {
   if (e.target.closest("[data-restart]")) { flip("restart", true); return $("target")?.focus(); }
   if (e.target.closest("[data-restart-off]")) return flip("restart", false);
   if (e.target.closest("[data-ledger-all]")) { ui.ledgerAll = true; renderPanel(); return; }
+  const lay = e.target.closest("[data-layout]");
+  if (lay) { ui.layout = lay.dataset.layout; try { localStorage.setItem("earshot.layout", ui.layout); } catch (err) { /* blocked */ } renderPanel(); return; }
+  const mv = e.target.closest("[data-move]");
+  if (mv) { ui.moving = ui.moving === mv.dataset.move ? null : mv.dataset.move; renderPanel(); if (ui.moving) $(`mv-${ui.moving}`)?.querySelector("button:not([disabled])")?.focus(); return; }
+  const to = e.target.closest("[data-stage-to]");
+  if (to) return moveTo(to.dataset.login, to.dataset.stageTo);
+  const pf = e.target.closest("[data-prof]");
+  if (pf) {  // the full profile: one row open at a time, toggled in place like the story line
+    const n = +pf.dataset.prof; ui.prof = ui.prof === n ? 0 : n;
+    document.querySelectorAll("#profile .st").forEach((li, k) => { const on = ui.prof === k + 1; li.classList.toggle("is-open", on); li.querySelector(".st-btn").setAttribute("aria-expanded", on); li.querySelector(".st-more").inert = !on; });
+    return;
+  }
+  const ex = e.target.closest("[data-expand]");
+  if (ex) { try { await api("/api/expansion", {segment: ex.dataset.segment, action: ex.dataset.expand}); } catch (err) { console.error(err); } refresh(true); return; }
   if (e.target.closest("[data-review]")) { document.querySelector(".ask-chip-pill")?.click(); return; }  // the same open the corner chip does
   const sc = e.target.closest("[data-scroll]");
   if (sc) { $(sc.dataset.scroll)?.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); return; }
   const st = e.target.closest("[data-step]");
   if (st) {  // one step open at a time; toggled in place so a poll never collapses or replays it
     const n = +st.dataset.step; ui.step = ui.step === n ? 0 : n;
-    document.querySelectorAll(".story .st").forEach((li, k) => { const on = ui.step === k + 1; li.classList.toggle("is-open", on); li.querySelector(".st-btn").setAttribute("aria-expanded", on); li.querySelector(".st-more").inert = !on; });
+    document.querySelectorAll("#how .st").forEach((li, k) => { const on = ui.step === k + 1; li.classList.toggle("is-open", on); li.querySelector(".st-btn").setAttribute("aria-expanded", on); li.querySelector(".st-more").inert = !on; });
     return;
   }
   const au = e.target.closest("[data-autonomy]");
@@ -451,7 +550,15 @@ document.addEventListener("click", async e => {
   try { await decideOpen(a, $("why")?.value || ""); }
   catch (err) { act.closest(".block").insertAdjacentHTML("beforeend", `<p class="error" role="alert">${esc(err.message)}</p>`); }
 });
+// Dragging a card onto a column is a shortcut for its Move menu.
+document.addEventListener("dragstart", e => { const c = e.target.closest?.("[data-drag]"); if (c) e.dataTransfer.setData("text/plain", c.dataset.drag); });
+document.addEventListener("dragover", e => { const c = e.target.closest?.("[data-drop]"); if (c) { e.preventDefault(); c.classList.add("is-over"); } });
+document.addEventListener("dragleave", e => e.target.closest?.("[data-drop]")?.classList.remove("is-over"));
+document.addEventListener("drop", e => { const c = e.target.closest?.("[data-drop]"), login = e.dataTransfer.getData("text/plain");
+  if (!c || !login) return; e.preventDefault(); c.classList.remove("is-over");
+  if (ui.data.leads.find(l => l.login === login)?.stage !== c.dataset.drop) moveTo(login, c.dataset.drop); });
 document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && ui.moving) { const m = ui.moving; ui.moving = null; renderPanel(); document.querySelector(`[data-move="${CSS.escape(m)}"]`)?.focus(); e.preventDefault(); return; }
   if (e.key !== "Escape" || view() === "home" || e.defaultPrevented || document.activeElement?.closest(".ask")) return;
   location.hash = "home";
 });
