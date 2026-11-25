@@ -19,7 +19,7 @@ import logging  # noqa: E402
 # httpx logs every request URL at INFO, and Hunter takes its key in the query string: keep keys out of logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-from app import autopilot, billing, gmail, graphq, intake, mailer, mcp_server, pipeline, policy, store, voice  # noqa: E402
+from app import autopilot, billing, gmail, graphq, intake, mailer, mcp_server, memory, pipeline, policy, store, voice  # noqa: E402
 
 app = FastAPI(title="Overheard", lifespan=mcp_server.lifespan)
 mcp_server.mount(app)  # /mcp: the same app for agents
@@ -359,6 +359,7 @@ def decide(login: str, d: Decision):
     if d.action == "reject":
         store.upsert("Person", "login", dict(login=login, draft_status="rejected", stage="Closed/Lost", stage_actor="rep"))
         store.log(login, "rep", "rejected", d.reason)
+        memory.record(graphq.product_name(pipeline.load_icp() or {}), full, "rejected")
         rule = policy.suggest_rule(full, d.reason) if d.reason.strip() else None
         same = ("field", "op", "value", "action")
         if rule and not any(all(r.get(k) == rule[k] for k in same) for r in st["rules"]):
@@ -379,6 +380,7 @@ def decide(login: str, d: Decision):
     if sent["status"] == "sent":  # a credit is only spent on mail that actually left
         billing.record("outreach.sent", login, tier=lead["tier"])
     store.log(login, "rep", "approved", mailer.describe(sent))
+    memory.record(graphq.product_name(pipeline.load_icp() or {}), full, "sent")
     return {"ok": True}
 
 

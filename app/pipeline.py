@@ -13,7 +13,7 @@ import httpx
 from moss import DocumentInfo, MossClient, QueryOptions
 from pydantic import BaseModel
 
-from app import billing, checks, enrich, reviewer, scoring, scout_web, store
+from app import billing, checks, enrich, graphq, memory, reviewer, scoring, scout_web, store
 
 MODEL = os.getenv("LLM_MODEL", "claude-sonnet-5-5")
 INDEX = "issues"
@@ -498,6 +498,12 @@ def run(description: str, product_repo: str = "", review=None, sources: list[str
     try:
         billing.reset()
         icp, leads = build_leads(description, product_repo, sources=sources)
+        # shortcut: filtered after drafting, so a remembered person still costs one draft; move before the Qualifier when runs are large
+        leads, skipped = memory.split(graphq.product_name(icp), leads)
+        if skipped["sent"] or skipped["rejected"]:
+            say("Qualifier: skipped " + " and ".join(
+                f"{_n(n, 'person', 'people')} you already {w}" for n, w in ((skipped["sent"], "wrote to"), (skipped["rejected"], "rejected")) if n)
+                + "; they return only if they post something new")
         json.dump(icp, open(ICP_PATH, "w"), indent=2)
         if review:
             review(leads)  # while the leads still carry the full issue text the Writer saw

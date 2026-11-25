@@ -7,7 +7,7 @@ import datetime
 import json
 import os
 
-from app import billing, checks, lessons, mailer, pipeline, policy, reviewer, store, trust
+from app import billing, checks, graphq, lessons, mailer, memory, pipeline, policy, reviewer, store, trust
 
 STATE_PATH = "data/autopilot.json"
 SIM_PATH = "data/sim/latest.json"
@@ -106,6 +106,7 @@ def run_sender(st: dict | None = None) -> int:
             continue
         store.upsert("Person", "login", dict(login=lead["login"], draft_status="approved", stage="Contacted", stage_actor="agent"))
         result = mailer.send(lead, lead["subject"], lead["body"])
+        memory.record(graphq.product_name(pipeline.load_icp() or {}), lead, "sent")
         if result["status"] == "sent":  # a credit is only spent on mail that actually left
             billing.record("outreach.sent", lead["login"], tier=lead["tier"])
         store.log(lead["login"], "agent", "released", f"inside policy, passed review; {mailer.describe(result)}")
