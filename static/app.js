@@ -69,6 +69,8 @@ const TICK = `<svg class="tick" viewBox="0 0 20 20" width="16" height="16" fill=
 
 // A pain as a headline: up to the first clause boundary, at most ten words, never cut mid-word, never an ellipsis.
 const STOP = /^(to|the|a|an|of|in|for|with|and|or|our|we|is|are|on|at|by|but)$/i;
+// Which site these results are for. The public copy holds one run at a time, so results must say whose they are.
+const ranFor = status => ((status.log || []).join("\n").match(/reading (?:https?:\/\/)?(?:www\.)?([^\s\/]+)/) || [])[1] || "";
 function headline(p) {
   const s = String(p || "").replace(/\s*\(.*?\)/g, "").trim();
   const head = s.split(/[,;:.?!]|\s(?:and|so|because|but|which|when|while|where|if)\s/i)[0].trim();
@@ -170,7 +172,7 @@ function homeCustomer(d, example, only) {
     : example ? `<p class="example-bar"><span>Example: Flexprice. Nothing here is yours.</span><button type="button" class="linkish" data-example-off>Use my website</button></p>` : "";
   const hero = `<header class="hero${enter(example ? "s-hero" : "h-hero")}"><div class="wrap">${banner}
     ${status.error ? stoppedNote(status) : ""}
-    <p class="label">Your customer</p>
+    <p class="label">Your customer${ranFor(status) ? ` · ${esc(ranFor(status))}` : ""}</p>
     <h1 class="display" id="home-line">${role ? buyer(role) : "Working out <em>who buys</em>"}</h1>
     ${line ? `<p class="hero-desc">${esc(cap(line))}.</p>` : ""}
     ${example || only || status.running ? "" : proofLine(d)}
