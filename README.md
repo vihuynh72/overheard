@@ -83,7 +83,7 @@ cp .env.example .env          # fill in your keys
 Open <http://localhost:8765>. Anthropic and Moss keys are required; the rest are optional.
 
 ```bash
-.venv/bin/python -m pytest -q          # 457 tests
+.venv/bin/python -m pytest -q          # 459 tests
 .venv/bin/python scripts/smoke.py      # 16 end-to-end checks, writes nothing
 claude mcp add --transport http overheard https://earshot-production.up.railway.app/mcp
 ```

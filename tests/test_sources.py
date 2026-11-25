@@ -225,3 +225,11 @@ def test_so_request_cap_and_failure_counted():
 def test_so_backoff_stops_calling_for_the_run():
     get = _so({"items": [_q(1)], "backoff": 10})
     assert len(s.so_voices(["usage billing invoices"] * 4, get=get)) == 1 and len(get.calls) == 1
+
+
+def test_reddit_reader_names_the_poster_from_the_first_profile_link(monkeypatch):
+    page = "x [u/a](https://www.reddit.com/user/Front-Statement-1636/) y https://www.reddit.com/user/someone_else"
+    got = s.reddit_reader("https://www.reddit.com/r/x/comments/1/t", extract=lambda urls, **k: {"results": [{"raw_content": page}]})
+    assert got["author"] == "Front-Statement-1636" and got["profile"].endswith("/user/Front-Statement-1636")
+    assert s.reddit_reader("https://www.reddit.com/r/x/comments/1/t", extract=lambda urls, **k: {"results": [{"raw_content": "no links"}]}) is None
+    assert s.reddit_reader("https://www.reddit.com/r/x/", extract=lambda urls, **k: 1 / 0) is None  # not a thread: never fetched

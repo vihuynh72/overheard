@@ -270,17 +270,20 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     say("Planner: inferring the customer profile and pain statements")
     icp = ask(ICP, ICP_SYSTEM, description)
 
-    if not icp.tracker_fit:
-        # Lesson from the first simulation: stop before spending anything when the method cannot work.
-        raise RuntimeError(f"Overheard is not a fit for this product: {icp.tracker_fit_reason}")
+    # Buyers who are not developers file no issues, so trackers are skipped and only the places the Planner
+    # named (forums, review sites) are heard. The run still declines below if those hold nothing either.
+    web_only = not icp.tracker_fit
+    if web_only:
+        say("Planner: these buyers do not write in issue trackers, so listening only where they do talk")
 
     repos = {}
-    if product_repo:
+    if product_repo and not web_only:
         repos[product_repo] = "product"
-    for c in icp.competitors:
+    for c in ([] if web_only else icp.competitors):
         if c.github_repo and gh(f"/repos/{c.github_repo}"):  # drop repos the model made up
             repos[c.github_repo] = "competitor"
-    say(f"Planner → Scout: watch {len(repos)} public issue trackers ({', '.join(repos) or 'none found'})")
+    if not web_only:
+        say(f"Planner → Scout: watch {len(repos)} public issue trackers ({', '.join(repos) or 'none found'})")
 
     issues = []
     for repo in repos:
@@ -289,8 +292,8 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         issues += found
     sellers = [icp.product.split()[0] if icp.product else "", product_repo.split("/")[0]] + [c.name for c in icp.competitors]
     try:  # the same pains, asked of every public repository; these join the trackers' issues for the meaning match
-        wide = scout_web.sources.github_wide_voices(icp.pains, get=gh, skip_repos=repos,
-                                                    sellers=sellers + [r.split("/")[0] for r in repos])
+        wide = [] if web_only else scout_web.sources.github_wide_voices(
+            icp.pains, get=gh, skip_repos=repos, sellers=sellers + [r.split("/")[0] for r in repos])
     except Exception:
         wide = []
     seen = {i["id"] for i in issues}
@@ -318,7 +321,7 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
     domains = scout_web.clean_domains([c.domain for c in icp.channels])
     if domains:
         say("Planner → Scout: listening on " + (", ".join(domains[:-1]) + " and " if len(domains) > 1 else "") + domains[-1])
-    voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains)
+    voices = scout_web.find_voices(icp.pains, icp.process_areas or scout_web.PROCESS_AREAS, domains=domains, **({"deep": True} if web_only else {}))
     voices = scout_web.github_voices(voices, repos, gh)
     if scout_web.last["failed"]:
         say(f"Scout: {scout_web.last['failed']} of {scout_web.last['queries']} web searches failed; those sources were not heard")
@@ -333,15 +336,19 @@ def build_leads(description: str, product_repo: str = "", *, say=say, contact: b
         say(f"Scout: {src['so_failed']} of {src['so_requests']} Stack Overflow searches failed; those were not heard")
     if src["reddit_ok"]:
         say(f"Scout: read the author and date of {src['reddit_ok']} Reddit posts from Reddit itself")
-    if src["reddit_blocked"]:
+    if src.get("reddit_read"):
+        say(f"Scout: read the author of {_n(src['reddit_read'], 'Reddit post')} through the page reader, since Reddit refused us directly")
+    elif src["reddit_blocked"]:
         say("Scout: Reddit refused a request, so the remaining Reddit posts keep no named author")
     kept = scout_web.drop_sellers(voices, sellers)
     if len(kept) < len(voices):
         say(f"Scout: dropped {len(voices) - len(kept)} posts written by the product's own company or its competitors")
     voices = kept
-    web = scout_web.as_people(voices)[:MAX_LEADS // 3]
+    web = scout_web.as_people(voices)[:MAX_LEADS if web_only else MAX_LEADS // 3]
     if voices:
         say(f"Scout: found {len(voices)} posts on forums and review sites describing a target pain")
+    if web_only and not web:  # declining is still the answer when nobody said it anywhere we can read
+        raise RuntimeError(f"Overheard is not a fit for this product: {icp.tracker_fit_reason}")
     if not issues and not web:
         raise RuntimeError("no public issues or posts found to search")
     ranked = sorted(by_author.items(), key=lambda kv: -max(s["match"] for s in kv[1]))[:MAX_LEADS - len(web)] + web

@@ -99,6 +99,34 @@ def _pages(extract, urls: list[str]) -> list[tuple[str, str]]:
             if isinstance(r, dict) and isinstance(r.get("url"), str) and isinstance(r.get("raw_content"), str) and r["raw_content"].strip()]
 
 
+def _plain(url: str, *, get=None) -> list[tuple[str, str]]:
+    """The home page fetched directly, for sites the page reader returns nothing for (script-rendered apps).
+    Their title and meta descriptions usually still say what is sold."""
+    import html as _html
+    import httpx
+    get = get or httpx.get
+    try:
+        for _ in range(4):  # each redirect hop passes the same address checks as a typed target
+            r = get(url, headers={"user-agent": "Mozilla/5.0 (compatible; Overheard/1.0)"}, timeout=10, follow_redirects=False)
+            if getattr(r, "is_redirect", False) and r.headers.get("location"):
+                url = normalize(str(r.url.join(r.headers["location"])))["url"]
+                continue
+            break
+        r.raise_for_status()
+        doc = r.text
+    except Exception:
+        return []
+    meta = re.findall(r"<title[^>]*>(.*?)</title>", doc, re.I | re.S)
+    for tag in re.findall(r"<meta\b[^>]*>", doc, re.I):
+        if re.search(r"(?:name|property)=[\"'](?:description|og:description|og:title)[\"']", tag, re.I):
+            m = re.search(r"content=(?:\"([^\"]*)\"|'([^']*)')", tag, re.I)
+            if m:
+                meta.append(m.group(1) or m.group(2) or "")
+    body = re.sub(r"<(script|style)[^>]*>.*?</\1>|<[^>]+>", " ", doc, flags=re.I | re.S)
+    text = " ".join(_html.unescape(" ".join(meta) + " " + body).split())
+    return [(url, text)] if len(text) >= 80 else []
+
+
 def _site_urls(url: str) -> list[str]:
     origin = "https://" + urlparse(url).netloc
     return list(dict.fromkeys([origin, *([url] if urlparse(url).path else []), *(origin + s for s in SUBPAGES)]))
@@ -120,7 +148,9 @@ def _find_repo(text: str, label: str) -> str:
     return found[0][0] if len(found) == 1 else ""
 
 
-def read_product(target: str, *, extract=None, fetch_repo=None) -> dict:
+def read_product(target: str, *, extract=None, fetch_repo=None, plain=None) -> dict:
+    # `plain` is the direct home-page fetch used when the page reader returns nothing. It is on by default only
+    # when the real reader is in use, so a caller that injects `extract` (tests) never touches the network.
     fail = lambda why: {"status": "error", "reason": why}  # noqa: E731
     try:
         n = normalize(target)
@@ -128,7 +158,7 @@ def read_product(target: str, *, extract=None, fetch_repo=None) -> dict:
         return fail(str(e))
     try:
         if extract is None and os.environ.get("TAVILY_API_KEY"):
-            extract = _tavily_extract
+            extract, plain = _tavily_extract, plain or _plain
         pages: list[tuple[str, str]] = []
         repo = n["repo"]
         if n["kind"] == "repo":
@@ -152,7 +182,7 @@ def read_product(target: str, *, extract=None, fetch_repo=None) -> dict:
         else:
             if extract is None:
                 return fail("no page reader is configured, so Overheard cannot read websites yet")
-            pages = _pages(extract, _site_urls(n["url"]))
+            pages = _pages(extract, _site_urls(n["url"])) or (plain(n["url"]) if plain else [])
             name_hint = (urlparse(n["url"]).hostname or "").removeprefix("www.").split(".")[0]
         if not pages:
             return fail("could not read that site" if n["kind"] == "site" else "could not read anything from that repository")

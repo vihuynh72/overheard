@@ -118,6 +118,31 @@ def reddit_post(url: str, *, get=httpx.get) -> dict | None:
             "profile": f"https://www.reddit.com/user/{author}"}
 
 
+_REDDIT_USER = re.compile(r"reddit\.com/user/([A-Za-z0-9_-]{3,20})")
+
+
+def reddit_reader(url: str, *, extract=None) -> dict | None:
+    """The author of a Reddit thread read through Tavily's page reader, for when Reddit refuses us directly.
+
+    shortcut: the first profile link on the page is taken as the poster (the post precedes its comments);
+    upgrade to Reddit's own API with an app key when one exists.
+    """
+    if "/comments/" not in url or not (extract or os.environ.get("TAVILY_API_KEY")):
+        return None
+    try:
+        if extract is None:
+            import tavily
+            extract = tavily.TavilyClient(os.environ["TAVILY_API_KEY"]).extract
+        text = (extract(urls=[url], extract_depth="advanced").get("results") or [{}])[0].get("raw_content") or ""
+    except Exception:
+        return None
+    author = next((m for m in _REDDIT_USER.findall(text) if m.lower() not in NOT_AUTHORS), "")
+    if not author:
+        return None
+    last["reddit_read"] = last.get("reddit_read", 0) + 1
+    return {"author": author, "created": "", "body": "", "profile": f"https://www.reddit.com/user/{author}"}
+
+
 _URL_DATE = re.compile(r"/(20\d\d)/(0[1-9]|1[0-2])(?:/(0[1-9]|[12]\d|3[01]))?(?:/|$)")
 
 

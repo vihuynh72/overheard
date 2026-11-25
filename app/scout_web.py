@@ -141,23 +141,33 @@ last = {"queries": 0, "failed": 0}  # the most recent sweep, so the caller can s
 
 
 def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None, hn=None, reddit=None, more=None,
-                per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None) -> list[dict]:
+                per_query: int = 5, min_score: float = 0.45, domains: list[str] | None = None,
+                deep: bool = False) -> list[dict]:
     """Tavily results, plus Hacker News records with an author and a date, plus Reddit authors from the post JSON.
+
+    `deep` is for buyers with no issue trackers, where the web is the only source: each pain is also asked in
+    the buyer's own words, each query is asked again of Reddit alone (the one forum that names its posters),
+    and more results per query are read at a lower relevance bar. The Qualifier still judges every post.
 
     `hn` and `reddit` default to the live sources only when `search` is not injected, so a test never reaches out.
     """
-    sources.last.update(hn_requests=0, hn_failed=0, reddit_ok=0, reddit_blocked=False)
+    sources.last.update(hn_requests=0, hn_failed=0, reddit_ok=0, reddit_blocked=False, reddit_read=0)
     if search is None:
         hn, reddit = hn or sources.hn_voices, reddit or sources.reddit_post
         more = [sources.so_voices] if more is None else more
-        search = _tavily_search(per_query) if os.environ.get("TAVILY_API_KEY") else None
+        search = _tavily_search(10 if deep else per_query) if os.environ.get("TAVILY_API_KEY") else None
     domains = clean_domains(domains) or _domains()  # the Planner's channels, else every known source
     best: dict[str, dict] = {}
-    qs = queries(pains, areas) if search else []  # no Tavily key: Hacker News alone
+    qs = [{**q, "on": domains} for q in queries(pains, areas)] if search else []  # no Tavily key: Hacker News alone
+    if deep and search:
+        min_score = min(min_score, 0.3)
+        qs += [{"pain": p, "query": p.strip(), "on": domains} for p in pains if p.strip()]
+        if any(d.endswith("reddit.com") or "reddit.com/" in d for d in domains):
+            qs += [{**q, "on": ["reddit.com"]} for q in list(qs)]
     last.update(queries=len(qs), failed=0)
     for q in qs:
         try:
-            results = search(q["query"], domains)
+            results = search(q["query"], q["on"])
         except Exception:  # one failed query never stops the sweep; counted in `last`, never its message (it could carry the key)
             last["failed"] += 1
             continue
@@ -177,8 +187,9 @@ def find_voices(pains: list[str], areas: list[str] | None = None, *, search=None
                          "created": (_date(r["published_date"]) if r.get("published_date") else "") or sources.url_date(url),
                          "pain": q["pain"], "match": round(score, 2), "kind": "web"}
     for v in best.values():  # a Reddit post found by Tavily carries no author or date; its public JSON does
-        if reddit and v["repo"].endswith("reddit.com") and not v["author"] and sources.last["reddit_ok"] < sources.MAX_REDDIT:
-            if got := reddit(v["url"]):
+        if reddit and v["repo"].endswith("reddit.com") and not v["author"] \
+                and sources.last["reddit_ok"] + sources.last.get("reddit_read", 0) < sources.MAX_REDDIT * (2 if deep else 1):
+            if got := reddit(v["url"]) or sources.reddit_reader(v["url"]):
                 v.update(author=got["author"], created=v["created"] or got["created"], profile=got["profile"])
     if hn and "news.ycombinator.com" in domains:
         for v in hn(pains):  # the structured record wins over a Tavily result for the same item

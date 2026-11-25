@@ -379,3 +379,18 @@ def test_build_leads_carries_a_github_wide_person_and_a_stack_overflow_person(mo
     assert any("1 issues from across GitHub, beyond the trackers" in x for x in said)
     assert any("1 Stack Overflow questions, each with its author and date" in x for x in said)
     assert sum(p == "/search/issues" for p, _ in asked) == 1
+
+
+def test_deep_asks_each_pain_plainly_and_again_of_reddit_alone():
+    asked = []
+
+    def search(query, domains):
+        asked.append((query, tuple(domains)))
+        return [{"url": "https://www.reddit.com/r/x/comments/1/t", "content": "c" * 100, "score": 0.35, "title": "t"}]
+
+    assert w.find_voices(["our till dies at dinner"], search=search, domains=["reddit.com", "g2.com"]) == []  # 0.35 is under the usual bar
+    shallow = len(asked)
+    asked.clear()
+    [v] = w.find_voices(["our till dies at dinner"], search=search, domains=["reddit.com", "g2.com"], deep=True)
+    assert v["match"] == 0.35 and len(asked) == 2 * (shallow + 1)
+    assert ("our till dies at dinner", ("reddit.com",)) in asked
