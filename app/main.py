@@ -209,7 +209,7 @@ def run(body: RunIn):
     """The one way a run starts: the web route and the MCP tool find_leads both come here."""
     with _start_lock:
         if pipeline.state["running"]:
-            raise HTTPException(409, "a run is already in progress")
+            raise HTTPException(409, "A run is already in progress on this copy. Your search is kept here; press again in a minute or two.")
         now = time.monotonic()
         if reason := _refusal(now):  # a refused start spends no budget; the page shows a non-2xx detail as the reason
             raise HTTPException(429, reason)

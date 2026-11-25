@@ -513,9 +513,10 @@ function failedView() {
 
 function homeMode() {
   const {leads, status} = ui.data;
+  // A pending question outlives a run someone else started: starting our own run clears ui.confirm first.
+  if (ui.confirm) return "confirm";
   if (status.running) return "running";
   if (ui.profile) return "profile";
-  if (ui.confirm) return "confirm";
   if (ui.example) return "example";
   if (ui.restart) return "fresh";
   if (!leads.length) return status.error ? "failed" : "fresh";
@@ -526,7 +527,7 @@ function renderHome() {
   const mode = homeMode(), slot = $("home-top");
   document.body.classList.toggle("is-fresh", mode !== "home");
   document.body.dataset.mode = mode;
-  if (mode === "running") { ui.confirm = null; if (ui.profile) setProfile(null); }  // a run started elsewhere: the question is moot
+  if (mode === "running" && ui.profile) setProfile(null);
   if (mode === "confirm") { if (!slot.querySelector("#confirm")) slot.innerHTML = confirmView(); }
   else if (mode === "fresh") {
     // Rebuild the form only when it is not being typed in.

@@ -59,3 +59,4 @@ Format: `YYYY-MM-DD · <what was decided or changed> · <why>`
 2026-11-24 · Discovery widened: issue search across all of GitHub (matched by meaning like tracker issues) and Stack Overflow questions, each with author and date · three or four trackers was too narrow a place to listen
 2026-11-24 · Profile-only mode: when a product's buyers do not write in public, POST /api/profile still names the customer, pains, channels and competitors, labelled as a profile with no people · the user wanted it to be useful for non-software products without pretending to find leads
 2026-11-24 · Results headline names the site they are for · the public copy holds one run at a time, so another visitor's (or a test) run replaced a pending search and read as its answer
+2026-11-24 · A pending 'is this what you sell?' question now survives a run started elsewhere · the public copy holds one run at a time and a test run wiped a visitor's nvidia.com search, showing them Flexprice results
